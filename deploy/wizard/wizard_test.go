@@ -77,12 +77,30 @@ func (r *fakeRunner) Run(_ context.Context, dir string, env []string, name strin
 		return []byte(`{"PublicAccessBlockConfiguration":{"BlockPublicAcls":true,"IgnorePublicAcls":true,"BlockPublicPolicy":true,"RestrictPublicBuckets":true}}`), nil
 	case strings.Contains(call, "pulumi stack select") && r.selectError:
 		return nil, os.ErrNotExist
+	case strings.Contains(call, "pulumi stack export"):
+		return []byte(`{"deployment":{"resources":[{"type":"pulumi:pulumi:Stack"}]}}`), nil
 	case strings.Contains(call, "pulumi config --json"):
 		region := "us-east-1"
 		if r.mismatch {
 			region = "eu-west-1"
 		}
-		b, _ := json.Marshal(map[string]any{"aws:region": map[string]string{"value": region}, "aws:allowedAccountIds": map[string]string{"value": "[\"123456789012\"]"}})
+		c := defaults()
+		c.Account = "123456789012"
+		c.Region = "us-east-1"
+		c.StateBackend = "s3://private-state"
+		shared := strings.HasSuffix(argument(args, "--stack"), "-shared")
+		project := "attestra-backend"
+		if shared {
+			project = "attestra-shared"
+		}
+		x := execution{c: c, project: project}
+		out := map[string]any{"deploymentAccountId": c.Account, "deploymentRegion": c.Region, "runtimeTableName": "runtime", "runtimeTableArn": "arn:aws:dynamodb:us-east-1:123456789012:table/runtime"}
+		values, _ := x.desiredConfig(shared, out)
+		config := map[string]configValue{"aws:region": {Value: region}, "aws:allowedAccountIds": {Value: "[\"123456789012\"]"}, project + ":proofKey": {Value: "[secret]", Secret: true}}
+		for key, value := range values {
+			config[project+":"+key] = configValue{Value: value}
+		}
+		b, _ := json.Marshal(config)
 		return b, nil
 	case strings.Contains(call, "pulumi stack output"):
 		stack := "next-dev"

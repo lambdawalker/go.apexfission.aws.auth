@@ -25,6 +25,10 @@ type RegistryChanger interface {
 }
 type RegistryFactory func(context.Context, string, string, string) (RegistryChanger, error)
 type publication struct {
+	JournalVersion                                        int
+	Desired                                               choices
+	Outputs, Shared                                       map[string]any
+	DNSDone, AdminDone                                    bool
 	Identity, Stack, Account, Region, Backend, URL, Stage string
 	Receipt                                               model.Receipt
 	Config                                                model.Configuration
@@ -113,7 +117,7 @@ func (x *execution) beginPublication(shared map[string]any) (*publication, error
 		return nil, e
 	}
 	if p != nil && p.Stage != "complete" {
-		if p.Stage == "ready" || p.Stage == "defaults" {
+		if p.Stage == "postapply" || p.Stage == "ready" || p.Stage == "defaults" {
 			return nil, errors.New("registry publication pending: use --operation publish to resume without rerunning infrastructure")
 		}
 		if p.URL != str(shared, "apiUrl") {
@@ -163,6 +167,10 @@ func (x *execution) finishPublication(p *publication, out map[string]any) error 
 	return x.publish(p)
 }
 func (x *execution) publish(p *publication) error {
+	if p.JournalVersion != 1 || !p.DNSDone || !p.AdminDone || p.Defaults == nil || p.Defaults.Environment != x.c.stack(false) || p.Defaults.Validate() != nil || model.Validate(p.Config) != nil {
+		return errors.New("publication receipt lacks completed deployment prerequisites or valid output configuration; recover the original deployment before publication")
+	}
+
 	client, e := x.registry(p.URL)
 	if e != nil {
 		return e
@@ -198,9 +206,5 @@ func (x *execution) resumePublication() error {
 	if p == nil {
 		return errors.New("no saved publication receipt")
 	}
-	if p.Stage == "complete" {
-		fmt.Fprintln(x.o.Output, "Registry publication already complete.")
-		return nil
-	}
-	return x.publish(p)
+	return x.completeApplied(p)
 }

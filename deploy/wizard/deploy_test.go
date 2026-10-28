@@ -18,16 +18,19 @@ import (
 
 type cloudRunner struct {
 	fakeRunner
-	objects      map[string][]byte
-	configs      map[string]map[string]configValue
-	secret       string
-	secretWrites int
-	certRequests int
-	pendingCerts map[string]string
+	objects       map[string][]byte
+	configs       map[string]map[string]configValue
+	remote        map[string]map[string]configValue
+	stacks        map[string]bool
+	secret        string
+	secretWrites  int
+	certRequests  int
+	adminFailures int
+	pendingCerts  map[string]string
 }
 
 func newCloudRunner() *cloudRunner {
-	return &cloudRunner{objects: map[string][]byte{}, configs: map[string]map[string]configValue{}, pendingCerts: map[string]string{}}
+	return &cloudRunner{remote: map[string]map[string]configValue{}, stacks: map[string]bool{}, objects: map[string][]byte{}, configs: map[string]map[string]configValue{}, pendingCerts: map[string]string{}}
 }
 func argument(a []string, k string) string {
 	for i, v := range a {
@@ -50,27 +53,80 @@ func (r *cloudRunner) Run(ctx context.Context, dir string, env []string, name st
 	call := name + " " + strings.Join(args, " ")
 	r.calls = append(r.calls, call)
 	result := func(v any) ([]byte, error) { b, e := json.Marshal(v); return b, e }
+	if name == "go" && strings.Contains(call, "-email") && r.adminFailures > 0 {
+		r.adminFailures--
+		return nil, errors.New("bootstrap unavailable")
+	}
 	if name == "pulumi" {
 		if strings.Contains(call, "stack ls") {
-			return []byte(`[]`), nil
+			items := []map[string]string{}
+			for stack := range r.stacks {
+				items = append(items, map[string]string{"name": stack})
+			}
+			return result(items)
 		}
 		stack := argument(args, "--stack")
+		if strings.Contains(call, "stack select") {
+			if !r.stacks[args[2]] {
+				return nil, os.ErrNotExist
+			}
+			return []byte(`{}`), nil
+		}
+		if strings.Contains(call, "stack init") {
+			r.stacks[args[2]] = true
+			return []byte(`{}`), nil
+		}
 		if strings.HasPrefix(call, "pulumi config set") {
 			if r.configs[stack] == nil {
 				r.configs[stack] = map[string]configValue{}
 			}
-			v := args[3]
-			secret := v == "--secret"
-			if secret {
-				v = "[secret]"
+			index := 0
+			for i, a := range args {
+				if a == "--" {
+					index = i + 1
+					break
+				}
 			}
-			r.configs[stack][args[2]] = configValue{Value: v, Secret: secret}
+			if index == 0 || index >= len(args) {
+				return nil, errors.New("config key/value need option terminator")
+			}
+			key := args[index]
+			value := "[secret]"
+			secret := false
+			for _, a := range args[:index] {
+				secret = secret || a == "--secret"
+			}
+			if !secret {
+				if index+1 >= len(args) {
+					return nil, errors.New("missing config value")
+				}
+				value = args[index+1]
+			}
+			r.configs[stack][key] = configValue{Value: value, Secret: secret}
 			return []byte(`{}`), nil
+		}
+		if strings.HasPrefix(call, "pulumi up") {
+			snapshot := map[string]configValue{}
+			for key, value := range r.configs[stack] {
+				snapshot[key] = value
+			}
+			r.remote[stack] = snapshot
+			return []byte(`{}`), nil
+		}
+		if strings.Contains(call, "config refresh") {
+			r.configs[stack] = map[string]configValue{}
+			for key, value := range r.remote[stack] {
+				r.configs[stack][key] = value
+			}
+			return []byte(`{}`), os.WriteFile(filepath.Join(dir, "Pulumi."+stack+".yaml"), []byte("encryptionsalt: preserved-provider-metadata\nconfig:\n  attestra-backend:proofKey:\n    secure: encrypted-ciphertext\n"), 0600)
 		}
 		if strings.HasPrefix(call, "pulumi config --json") {
 			return result(r.configs[stack])
 		}
 		if strings.Contains(call, "stack export") {
+			if r.remote[stack] != nil {
+				return []byte(`{"deployment":{"resources":[{"type":"pulumi:pulumi:Stack"}]}}`), nil
+			}
 			return []byte(`{"deployment":{"resources":[]}}`), nil
 		}
 		if strings.Contains(call, "stack output") {

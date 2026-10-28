@@ -74,6 +74,7 @@ type execution struct {
 	env                 []string
 	dir, stack, project string
 	cloudflareToken     string
+	initialized         map[string]bool
 }
 
 func (x *execution) run(name string, args ...string) ([]byte, error) {
@@ -99,7 +100,7 @@ func withEnv(env []string, key, value string) []string {
 	}
 	return append(out, key+"="+value)
 }
-func Run(ctx context.Context, o Options) error {
+func Run(ctx context.Context, o Options) (result error) {
 	if o.Root == "" {
 		o.Root = "."
 	}
@@ -140,6 +141,7 @@ func Run(ctx context.Context, o Options) error {
 	if e = c.validate(); e != nil {
 		return e
 	}
+	_, alreadyBound := s.Bindings[c.identity()]
 	if e = s.bind(c); e != nil {
 		return e
 	}
@@ -154,10 +156,15 @@ func Run(ctx context.Context, o Options) error {
 			return errors.New("deployment not approved")
 		}
 	}
-	s.Choices = c
-	if e = save(filepath.Join(root, ".attestra", "wizard.json"), s); e != nil {
-		return e
-	}
+	defer func() {
+		if result == nil && c.Operation != "deploy" && c.Operation != "publish" {
+			s.Choices = c
+			if !alreadyBound {
+				delete(s.Bindings, c.identity())
+			}
+			result = save(filepath.Join(root, ".attestra", "wizard.json"), s)
+		}
+	}()
 	env := os.Environ()
 	for _, entry := range env {
 		parts := strings.SplitN(entry, "=", 2)
@@ -231,6 +238,10 @@ func Run(ctx context.Context, o Options) error {
 				return errors.New("DNS/TLS prerequisite: set CLOUDFLARE_API_TOKEN, supply preissued certificate ARNs, or choose --route53-zone-id before deployment")
 			}
 		}
+		s.Choices = c
+		if e = save(filepath.Join(root, ".attestra", "wizard.json"), s); e != nil {
+			return e
+		}
 		release, e := x.acquireLock()
 		if e != nil {
 			return e
@@ -241,13 +252,17 @@ func Run(ctx context.Context, o Options) error {
 			if e != nil {
 				return e
 			}
-			if pending != nil && (pending.Stage == "ready" || pending.Stage == "defaults") {
-				fmt.Fprintln(o.Output, "Resuming saved registry publication without rerunning infrastructure.")
-				return x.publish(pending)
+			if pending != nil && (pending.Stage == "postapply" || pending.Stage == "ready" || pending.Stage == "defaults") {
+				fmt.Fprintln(o.Output, "Resuming saved deployment completion and publication without rerunning infrastructure.")
+				return x.completeApplied(pending)
 			}
 		}
 	}
 	if c.Operation == "publish" {
+		s.Choices = c
+		if e = save(filepath.Join(root, ".attestra", "wizard.json"), s); e != nil {
+			return e
+		}
 		return x.resumePublication()
 	}
 	if c.Operation == "deploy" || c.Operation == "preview" {
@@ -349,8 +364,15 @@ func (x *execution) selectStack(shared, initialize bool) error {
 		if _, e = x.run("pulumi", "stack", "init", x.stack, "--non-interactive"); e != nil {
 			return e
 		}
+		if x.initialized == nil {
+			x.initialized = map[string]bool{}
+		}
+		x.initialized[x.stack] = true
 	}
-	return nil
+	if x.initialized[x.stack] {
+		return nil
+	}
+	return x.restoreConfig()
 }
 
 type configValue struct {
@@ -407,7 +429,7 @@ func (x *execution) set(k, v string) error {
 	if !strings.Contains(k, ":") {
 		k = x.project + ":" + k
 	}
-	_, e := x.run("pulumi", "config", "set", k, v, "--stack", x.stack, "--non-interactive")
+	_, e := x.run("pulumi", "config", "set", "--stack", x.stack, "--non-interactive", "--", k, v)
 	return e
 }
 func (x *execution) outputs() (map[string]any, error) {
@@ -457,6 +479,9 @@ func (x *execution) stackRun(shared bool, sharedOut map[string]any) (map[string]
 	}
 	if !write {
 		if x.c.Operation == "preview" {
+			if e := x.checkPreviewConfig(shared, sharedOut, existing); e != nil {
+				return nil, e
+			}
 			b, e := x.run("pulumi", "preview", "--stack", x.stack, "--non-interactive", "--diff")
 			if e != nil {
 				return nil, e
@@ -514,35 +539,27 @@ func (x *execution) stackRun(shared bool, sharedOut map[string]any) (map[string]
 		return nil, e
 	}
 	if !shared {
-		if str(out, "assetLinksUrl") == "" && x.c.AndroidAssociations == "" {
-			fmt.Fprintln(x.o.Output, "Android app links/passkey association hosting is not configured. Supply --android-associations with your package and signing fingerprints; [] explicitly hosts an empty/revoked association list.")
-		}
-		if e = x.finishPublication(receipt, out); e != nil {
+		receipt.JournalVersion = 1
+		receipt.Desired = x.c
+		receipt.Outputs = out
+		receipt.Shared = sharedOut
+		receipt.Stage = "postapply"
+		if e = x.storePublication(receipt); e != nil {
 			return nil, e
 		}
-		if e = x.exportAndroid(out, sharedOut); e != nil {
-			return nil, e
-		}
+		return out, x.completeApplied(receipt)
 	}
-	if e = x.hostDNS(shared, out); e != nil {
+	if e = x.hostDNS(true, out); e != nil {
 		return nil, e
 	}
-	if shared {
-		_, e = x.o.Runner.Run(x.ctx, x.o.Root, x.env, "go", "run", "./cmd/admin-setup", "-auth-only", "-pool", str(out, "adminPoolId"), "-login", str(out, "adminLoginDomain"))
-		if e != nil {
-			return nil, e
-		}
-	}
-	if !shared && x.c.AdminEmail != "" {
-		_, e = x.o.Runner.Run(x.ctx, x.o.Root, x.env, "go", "run", "./cmd/admin-setup", "-pool", str(sharedOut, "adminPoolId"), "-login", str(sharedOut, "adminLoginDomain"), "-table", str(sharedOut, "runtimeTableName"), "-email", x.c.AdminEmail, "-environment", x.stack)
-		if e != nil {
-			return nil, e
-		}
+	_, e = x.o.Runner.Run(x.ctx, x.o.Root, x.env, "go", "run", "./cmd/admin-setup", "-auth-only", "-pool", str(out, "adminPoolId"), "-login", str(out, "adminLoginDomain"))
+	if e != nil {
+		return nil, e
 	}
 
 	return out, nil
 }
-func (x *execution) configure(shared bool, out map[string]any, existing map[string]configValue) error {
+func (x *execution) desiredConfig(shared bool, out map[string]any) (map[string]string, error) {
 	index, admin, api, origin := x.c.domains()
 	values := map[string]string{"deploymentPrefix": x.c.Prefix, "expectedAccountId": x.c.Account, "expectedRegion": x.c.Region}
 	if shared {
@@ -554,7 +571,7 @@ func (x *execution) configure(shared bool, out map[string]any, existing map[stri
 		for _, target := range targets {
 			b, e := os.ReadFile(filepath.Join(x.o.Root, "dist", target.Name+".zip"))
 			if e != nil {
-				return e
+				return nil, e
 			}
 			hash.Write([]byte(target.Name))
 			hash.Write(b)
@@ -586,6 +603,13 @@ func (x *execution) configure(shared bool, out map[string]any, existing map[stri
 	if x.c.Route53ZoneID != "" {
 		values["route53ZoneId"] = x.c.Route53ZoneID
 	}
+	return values, nil
+}
+func (x *execution) configure(shared bool, out map[string]any, existing map[string]configValue) error {
+	values, e := x.desiredConfig(shared, out)
+	if e != nil {
+		return e
+	}
 	keys := make([]string, 0, len(values))
 	for k := range values {
 		keys = append(keys, k)
@@ -613,7 +637,7 @@ func (x *execution) configure(shared bool, out map[string]any, existing map[stri
 			}
 			encoded := base64.StdEncoding.EncodeToString(key)
 			clear(key)
-			_, e := r.RunInput(x.ctx, x.dir, x.env, bytes.NewBufferString(encoded+"\n"), "pulumi", "config", "set", x.project+":proofKey", "--secret", "--stack", x.stack, "--non-interactive")
+			_, e := r.RunInput(x.ctx, x.dir, x.env, bytes.NewBufferString(encoded+"\n"), "pulumi", "config", "set", "--secret", "--stack", x.stack, "--non-interactive", "--", x.project+":proofKey")
 			if e != nil {
 				return e
 			}
