@@ -18,32 +18,35 @@ Preserve Attestra source unchanged. No live AWS changes. No dynamic executable p
 - Destructive commands without explicit exact-target confirmation.
 
 ### Task 1: Runtime composition and authentication
-- [ ] Extract audited email, api, passkey, signin, challenge, AWS adapters and tests with import rewrites and provenance.
-- [ ] Implement core.Module, Descriptor, dependency ordering and optional contributors; validate cycles, incompatible versions and duplicate contributions.
-- [ ] Implement api route descriptors/runtime and authorization Principal/Authorizer; test default denial and conflicts.
-- [ ] Implement auth JWT validation and adapters; test adversarial tokens and provider-log redaction.
-- [ ] Run root go test ./... and commit.
+- [x] Extract audited email, api, passkey, signin, challenge, AWS adapters and tests with import rewrites and provenance.
+- [x] Implement core.Module, Descriptor, dependency ordering and optional contributors; validate cycles, incompatible versions and duplicate contributions.
+- [x] Implement api route descriptors/runtime and authorization Principal/Authorizer; test default denial and conflicts.
+- [x] Implement auth JWT validation and adapters; test adversarial tokens and provider-log redaction.
+- [x] Run root go test ./... and commit.
 
 ### Task 2: Admin and configuration
-- [ ] Implement page manifest, assets, navigation, separate admin verifier and permission-enforced APIs.
-- [ ] Implement namespaced schema validation/migration and CAS revision store, immutable history with environment isolation; test conflicts and authorization.
-- [ ] Run root go test ./... and commit.
+- [x] Implement page manifest, assets, navigation, separate admin verifier and permission-enforced APIs.
+- [x] Implement namespaced schema validation/migration and CAS revision store, immutable history with environment isolation; test conflicts and authorization.
+- [x] Run root go test ./... and commit.
 
 ### Task 3: Infrastructure composition
-- [ ] Implement Pulumi API, Lambda, authentication and admin components with explicit archive/resource inputs, scoped IAM, protected stateful resources and exported outputs.
-- [ ] Add application extension callbacks and mock tests for resources/routes/aliases.
-- [ ] Run pulumi module go test ./... and commit.
+- [x] Implement Pulumi API, Lambda, authentication and admin components with explicit archive/resource inputs, scoped IAM, protected stateful resources and exported outputs.
+- [x] Add application extension callbacks and mock tests for resources/routes/aliases.
+- [x] Run pulumi module go test ./... and commit.
 
 ### Task 4: Deployment and consumer
-- [ ] Extract operator clients and legacy workflow with provenance; generalize Lambda packaging.
-- [ ] Implement strict manifest and init/build/preview/deploy/status/teardown using injected commands, AWS account checks, Pulumi state and explicit destruction guards.
-- [ ] Add sales runtime, assets, infrastructure, manifest and tests as separate Go modules using local development replaces.
-- [ ] Run all module tests, build archives, add CI, installation and migration compatibility matrix; commit.
+- [x] Extract operator clients and legacy workflow with provenance; generalize Lambda packaging.
+- [x] Implement strict manifest and init/build/preview/deploy/status/teardown using injected commands, AWS account checks, Pulumi state and explicit destruction guards.
+- [x] Add sales runtime, assets, infrastructure, manifest and tests as separate Go modules using local development replaces.
+- [x] Run all module tests, build archives, add CI, installation and migration compatibility matrix; commit.
 
 ### Task 5: Review and delivery
-- [ ] Run tests, race/static checks and cross-platform CLI builds. Inspect runtime dependency graph.
-- [ ] Request independent branch review, fix critical/important findings, rerun affected tests.
-- [ ] Push feature branch and open PR with exact validation evidence and limitations.
+- [x] Run tests, race/static checks and cross-platform CLI builds. Inspect runtime dependency graph.
+- [x] Request independent branch review, fix critical/important findings, rerun affected tests.
+- [x] Push feature branch and open PR with exact validation evidence and limitations.
 
 ## Interface ledger
 core descriptors consumed by API/admin/deploy; api descriptors consumed by Pulumi. No Pulumi types in runtime. Application manifest selects already linked module IDs and versions only. Runtime auth consumes verified Principal; infrastructure does not grant application permissions implicitly.
+
+## Execution record
+The supplied prompt authorized execution without additional design approval. Native implementation was used, followed by the skill-required independent reviewer. See docs/review.md for the full decision ledger and docs/verification.md for observed results. The generic engine retains reusable operator clients and the original workflow separately; it does not claim complete wizard parity. Existing-resource imports and live previews remain unexecuted. PR creation is the final delivery action.

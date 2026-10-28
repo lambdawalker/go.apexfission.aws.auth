@@ -2,7 +2,7 @@
 
 Source reference: `lambdawalker/go.attestra.aws.auth` commit `cf74956eea69f04b7f96d6835462c3f2bd61c342` (2026-10-28 audit). No changes were made to that repository.
 
-- `email`, `api`, `passkey`, `signin`, `challenge`, `awsemail`, `awsidentity`, `awsstore`: authentication extraction with package imports changed. Removed raw provider-error logging in `email` and added regression coverage. Existing wire behavior and test suites retained.
+- `email`, `api`, `passkey`, `signin`, `challenge`, `awsemail`, `awsidentity`, `awsstore`: authentication extraction with package imports changed. Removed raw provider-error logging in `email` and `passkey`, and disabled credential-bearing passkey redirects and added regression coverage. Existing wire behavior and test suites retained.
 - `capture`, `captureapi`, `awscapture`, `assetlinks`, `registry`, `runtimeconfig`, `envreset`, `adminapi`, `adminsetup`, `internal/awshttp`: optional compatibility packages, imports changed. Core authentication does not import capture or reset. Original configuration/grant transactions and admin MFA reconciliation remain available.
 - `deploy/aws`, `dns`, `github`, `vault`, `registry`, `ui`: reusable operator subsystems and tests extracted from `tools/deploy/internal`. Vault version, cryptography and scope retained deliberately so existing encrypted vaults remain readable.
 - `deploy/build/package.go`: existing executable-bootstrap ZIP writer retained. New build driver takes application-owned targets.

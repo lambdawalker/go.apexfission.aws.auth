@@ -40,7 +40,7 @@ go get github.com/lambdawalker/go.apexfission.aws.auth/pulumi@<reviewed-commit>
 go install github.com/lambdawalker/go.apexfission.aws.auth/deploy/cmd/apexfission@<reviewed-commit>
 ```
 
-Nested modules are released with their own tags (`pulumi/v0.1.0`, `deploy/v0.1.0`); the root uses `v0.1.0`. No tags or package publication are performed by this PR. The example uses local `replace` directives for development; production consumers pin released modules or reviewed commits and remove those replaces.
+Nested modules are released with their own tags (`pulumi/v0.1.0`, `deploy/v0.1.0`); the root uses `v0.1.0`. No tags or package publication are performed by this PR. The repository uses `go.work` for development. Distributable nested modules pin a real remote root commit and contain no local replaces. The example additionally uses local `replace` directives for standalone development; production consumers pin released modules or reviewed commits and remove those replaces.
 
 ## Verify
 

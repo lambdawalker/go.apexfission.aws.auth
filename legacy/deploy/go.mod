@@ -34,7 +34,7 @@ require (
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
-	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0
+	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261028150453-6e6bb155c044
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
@@ -49,5 +49,3 @@ require (
 	golang.org/x/sys v0.33.0
 	golang.org/x/text v0.25.0
 )
-
-replace github.com/lambdawalker/go.apexfission.aws.auth => ../..

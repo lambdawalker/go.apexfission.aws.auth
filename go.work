@@ -1,0 +1,10 @@
+go 1.26.6
+
+use (
+ .
+ ./deploy
+ ./pulumi
+ ./legacy/deploy
+ ./examples/sales
+ ./examples/sales/infra
+)
