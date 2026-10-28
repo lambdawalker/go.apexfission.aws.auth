@@ -15,6 +15,15 @@ This is an initial implementation for review, **not a production-certified relea
 
 Runtime imports never require Pulumi. Go dependencies provide executable implementations; JSON manifests only identify already linked modules and build/stack settings.
 
+## Complete Attestra-compatible deployments
+
+The optional pulumi/backend and pulumi/shared packages declare the full backend
+and shared administrator/index infrastructure. The deploy/wizard package provides
+scoped first deployment, updates and recovery from consumer-owned entrypoints.
+These preserve the original Attestra contracts and use new isolated projects;
+they do not adopt existing state. Generic components remain available for smaller
+applications. See [migration](docs/migration.md).
+
 ## Try the sales consumer
 
 Requires Go 1.26.6. From `examples/sales`:

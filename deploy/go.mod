@@ -5,6 +5,7 @@ go 1.26.6
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/charmbracelet/huh v0.8.0
+	github.com/charmbracelet/x/term v0.2.1
 	golang.org/x/crypto v0.38.0
 )
 
@@ -19,7 +20,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.13.4 // indirect
 	github.com/aws/smithy-go v1.28.7 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
-	github.com/charmbracelet/x/term v0.2.1 // indirect
 )
 
 require (
@@ -34,7 +34,7 @@ require (
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
-	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261028150453-6e6bb155c044
+	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261028190450-19393652b2d9
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
