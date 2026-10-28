@@ -230,6 +230,13 @@ func parse(o Options) (saved, choices, bool, error) {
 	} else if !os.IsNotExist(e) {
 		return s, s.Choices, false, e
 	}
+	local := map[string]json.RawMessage{}
+	if len(b) > 0 {
+		var document struct{ Choices map[string]json.RawMessage }
+		if json.Unmarshal(b, &document) == nil {
+			local = document.Choices
+		}
+	}
 	c := s.Choices
 	c.Operation = "preview" // A previous deploy never authorizes the next invocation.
 	f := flag.NewFlagSet("deploy", flag.ContinueOnError)
@@ -250,6 +257,16 @@ func parse(o Options) (saved, choices, bool, error) {
 	}
 	if f.NArg() != 0 {
 		return s, c, yes, errors.New("unexpected positional arguments")
+	}
+	explicit := map[string]bool{}
+	f.Visit(func(v *flag.Flag) { explicit[v.Name] = true })
+	skipped := map[*string]bool{}
+	if len(o.Args) != 0 {
+		var err error
+		skipped, err = importLegacy(&c, local, explicit)
+		if err != nil {
+			return s, c, yes, err
+		}
 	}
 	if len(o.Args) == 0 {
 		r := o.reader
@@ -272,6 +289,16 @@ func parse(o Options) (saved, choices, bool, error) {
 			label string
 			p     *string
 		}{{"Prefix (- selects separate final identity)", &c.Prefix}, {"Logical environment", &c.Environment}, {"Scope (both/shared/backend)", &c.Scope}, {"Operation (preview/deploy/status/health/publish)", &c.Operation}, {"AWS account", &c.Account}, {"AWS region", &c.Region}, {"Existing S3 state base", &c.StateBackend}, {"Base domain", &c.BaseDomain}, {"Sender domain (externally verified SES)", &c.SenderDomain}, {"Sender email", &c.SenderAddress}, {"Bootstrap admin email (optional)", &c.AdminEmail}, {"AWS profile (existing CLI session, optional)", &c.Profile}, {"Route53 zone ID (optional; otherwise Cloudflare/preissued TLS)", &c.Route53ZoneID}, {"Android association JSON (optional; [] explicitly hosts empty associations)", &c.AndroidAssociations}, {"Environment class (optional test/production)", &c.EnvironmentClass}} {
+			// Environment is chosen before resolving environment-specific exports.
+			if v.p == &c.Account {
+				skipped, e = importLegacy(&c, local, explicit)
+				if e != nil {
+					return s, c, yes, e
+				}
+			}
+			if skipped[v.p] {
+				continue
+			}
 			if e = prompt(v.label, v.p); e != nil {
 				return s, c, yes, e
 			}
