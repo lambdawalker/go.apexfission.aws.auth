@@ -19,20 +19,24 @@ No AWS deployment/teardown. Prefix defaults to next; explicit empty prefix selec
 ### Task 1: Infrastructure
 Files: pulumi/shared/*, pulumi/backend/*; tests alongside.
 Expose shared.Deploy(ctx) and backend.Deploy(ctx), using stack config and consumer dist artifacts, extracted from original infra-index and infra. Change imports to framework runtime. External verified sender support required. Keep original runtime/config schemas and feature coverage. Add scope/account/region guards and prefix stack isolation. Export needed outputs. Document config keys and archives.
-- [ ] Extract declarations and write regression tests for isolation/external sender.
-- [ ] Run Pulumi module tests/vet.
-- [ ] Commit and review.
+- [x] Extract declarations and write regression tests for isolation/external sender.
+- [x] Run Pulumi module tests/vet.
+- [x] Commit and review.
 
 ### Task 2: Reusable wizard
 Files: deploy/wizard/*.go; tests alongside.
 Expose Run(ctx, root, input, output, args) error (or explicit Options API documented for consumer). Persistent versioned deployment selections; prefix/env/scope/operation; build target configuration; first-deploy stack initialization; certificate readiness and explicit DNS setup; shared output wiring; registry publication; health and Android configuration. Reuse existing helper code where appropriate. Print exact targets and require explicit deploy intent. Preserve backend protections and select separate projects/stacks. No teardown wizard required in this change.
-- [ ] Write tests with fake runner for scope order, no cloud mutation preview, mismatch rejection, blank prefix, config persistence.
-- [ ] Implement, test race/vet; document API.
-- [ ] Commit and review.
+- [x] Write tests with fake runner for scope order, no cloud mutation preview, mismatch rejection, blank prefix, config persistence.
+- [x] Implement, test race/vet; document API.
+- [x] Commit and review.
 
 ### Task 3: Consumer integration
 Files: cmd/deploy, cmd runtime entrypoints, infra, infra-index, deploy.sh, deploy.bat, workflows/docs.
 Use extracted infrastructure and runtime library; map build artifacts; configure defaults; explicit first-deploy instructions. Pin real remote framework commit before publishing consumer; no sibling replace dependencies.
-- [ ] Build integration and launcher tests.
-- [ ] Run root and infra tests, actual Lambda packaging, Windows CLI crosscompile.
-- [ ] Review full changes; publish paired PRs with exact validation limits.
+- [x] Build integration and launcher tests.
+- [x] Run root and infra tests, actual Lambda packaging, Windows CLI crosscompile.
+- [x] Review full changes; prepare paired PRs with exact validation limits.
+
+## Verification result
+
+Infrastructure and wizard review findings were fixed and scoped rereviews found no remaining blockers. Standalone runtime, Pulumi and deploy module tests/race checks/vet passed. The consumer was tested with GOWORK=off against published framework commit eda2f3f2a93633e3b005f761e0d94ee24a4cf15c, with no local replacements. All 22 Linux ARM64 Lambda ZIPs were built and inspected; Windows CLI cross-compilation, POSIX launcher and workflow YAML checks passed. No live cloud deployment, DNS publication, invitation or teardown was performed. Device sign-in/capture and actual AWS readiness remain deployment acceptance checks.
