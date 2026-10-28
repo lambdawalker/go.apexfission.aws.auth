@@ -1,0 +1,33 @@
+name: Verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        module: ['.', 'pulumi', 'deploy', 'legacy/deploy', 'examples/sales', 'examples/sales/infra']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: '**/go.sum'
+      - run: go test -race ./...
+        working-directory: ${{ matrix.module }}
+      - run: go vet ./...
+        working-directory: ${{ matrix.module }}
+  consumer-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+      - run: go run ./cmd/deploy -op build
+        working-directory: examples/sales
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sales-lambdas
+          path: examples/sales/dist/*.zip

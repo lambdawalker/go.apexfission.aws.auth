@@ -1,0 +1,6 @@
+**/dist/
+**/.pulumi/
+**/.apexfission/
+**/.attestra/
+*.vault.enc
+*.test

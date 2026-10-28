@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "application": "sales",
+  "modules": {"auth": "0.1.0", "sales": "0.1.0"},
+  "builds": [
+    {"name": "application", "package": "./cmd/api"},
+    {"name": "challenge", "package": "./cmd/challenge"}
+  ],
+  "environments": {
+    "dev": {"account": "123456789012", "region": "us-east-1", "backend": "s3://replace-with-your-sales-state-bucket", "stack": "dev", "directory": "infra"}
+  }
+}
