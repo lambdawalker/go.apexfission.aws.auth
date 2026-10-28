@@ -74,3 +74,16 @@ The registry's raw regional API Gateway endpoint is validated before any credent
 Public Android properties are exported to `.attestra/<full-backend-stack>-android.properties`, retaining original `attestraEnvironment`, `attestraApiBaseUrl`, `attestraLinkHost`, `attestraAwsRegion`, `attestraCognitoUserPoolId`, `attestraCognitoClientId`, `attestraCaptureEnabled`, and `attestraCaptureDocumentType` keys, plus the index URL and uppercase aliases. Use that file as the Android build's public configuration input.
 
 Health checks verify the auth-status sign-in-required response, public index schema and backend entry/config hash, association JSON/content when present, and the admin page/expected login redirect. They do not create users, send mail, upload capture documents, or prove complete end-user sign-in. Missing optional app association hosting is reported as a warning; configured-but-missing hosting fails health. No live AWS/Pulumi deployment is performed by tests.
+
+### Import existing operator values
+
+Run `./export-wizard.sh --environment dev` (Windows: `export-wizard.bat --environment dev`)
+in the original `go.attestra.aws.auth` checkout first. It writes nonsecret portable
+preferences to `~/.attestra/legacy-wizard.json`, grouped by logical environment.
+The new wizard reads that file automatically after choosing the environment.
+Imported questions are skipped. Explicit flags take priority, followed by this
+checkout's saved choices, the matching exported environment, and built-in defaults.
+Prefix, scope and operation remain explicit wizard questions; legacy hostnames,
+certificate ARNs, proof keys, state bindings and vault credentials are never imported.
+Missing values still prompt. Corrupt/unsupported exports fail with instructions to
+re-export. AWS account/region/state verification still applies to imported values.
