@@ -9,3 +9,16 @@ Source reference: `lambdawalker/go.attestra.aws.auth` commit `cf74956eea69f04b7f
 - `legacy/deploy`: original operator workflow retained, with Go imports/module path updated. Launcher tests use copied source fixtures. This is compatibility tooling for the **original Attestra directory layout**, not the new application's deployment engine. Never point it at an arbitrary application's resources.
 
 The upstream source does not provide a license file. This extraction was requested by the repository owner; no new redistribution license has been invented. Before publishing a public version, choose a license and review all dependency licenses.
+
+## Parallel deployment extraction
+The shared/backend deployment packages and process entrypoints additionally use
+Attestra source commit `9ee9affd51578b873586b538a8e602fb30c1fdbf`.
+The newer enrollment policy, password flows and capture completion facts are
+retained with their upstream tests. Existing generic status callers without an
+enrollment service retain their basic passkey response. Email/passkey redaction
+fixes from the initial extraction remain in place.
+
+The new `entrypoints/<name>.Run()` packages are process entrypoints: they read
+environment configuration and start Lambda (or run the explicitly selected admin
+setup command). They are intended for one-line consumer main packages, not
+embedding inside an already running HTTP server.

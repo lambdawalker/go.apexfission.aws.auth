@@ -71,7 +71,7 @@ func buildOne(ctx context.Context, root string, t core.BuildTarget) error {
 	}
 	defer os.RemoveAll(dir)
 	binary := filepath.Join(dir, "bootstrap")
-	cmd := exec.CommandContext(ctx, "go", "build", "-p", "2", "-trimpath", "-tags", "lambda.norpc", "-o", binary, t.Package)
+	cmd := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-p", "2", "-trimpath", "-tags", "lambda.norpc", "-o", binary, t.Package)
 	cmd.Dir = root
 	env := awsenv.WithoutCredentials(os.Environ())
 	filtered := env[:0]
