@@ -17,6 +17,7 @@ Reference audited: Attestra `cf74956eea69f04b7f96d6835462c3f2bd61c342`. Attestra
 | CLI Windows amd64 / macOS arm64 cross-compilation | Passed; binaries were not executed on those operating systems |
 | Admin shell JavaScript `node --check` | Passed; not a real-browser OAuth smoke test |
 | Clean external Go consumer without local replaces | `go get` and composition test passed against root commit `6e6bb155c044` |
+| CLI installation from explicitly pinned remote module and `init` | Passed; direct `go install …@commit` is blocked by the empty default branch until merge/tag |
 | Standalone nested module tests with `GOWORK=off` | Passed against the actual pinned remote root module |
 | Runtime dependency graph | `auth` and `application` have no Pulumi imports |
 

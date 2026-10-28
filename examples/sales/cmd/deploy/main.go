@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"flag"
+	"github.com/lambdawalker/go.apexfission.aws.auth/application"
 	"github.com/lambdawalker/go.apexfission.aws.auth/auth"
 	"github.com/lambdawalker/go.apexfission.aws.auth/deploy"
 	sales "github.com/lambdawalker/go.apexfission.aws.auth/examples/sales"
@@ -31,7 +32,15 @@ func main() {
 	if e != nil {
 		log.Fatal(e)
 	}
-	if e = (deploy.Engine{Root: root, Manifest: m}).Execute(context.Background(), *op, *env, deploy.Options{}); e != nil {
+	app, e := application.Compose(auth.Module{}, sales.Module{})
+	if e != nil {
+		log.Fatal(e)
+	}
+	engine := deploy.Engine{Root: root, Manifest: m}
+	if e = engine.Use(app); e != nil {
+		log.Fatal(e)
+	}
+	if e = engine.Execute(context.Background(), *op, *env, deploy.Options{}); e != nil {
 		log.Fatal(e)
 	}
 }

@@ -16,7 +16,7 @@ Implement only the optional contracts you use:
 | `core.LifecycleModule` | Application-invoked before/after deployment hooks |
 | `pulumi.Extension.Provision` | Application-stack resource contribution and outputs |
 
-`application.Compose` validates declarations before runtime construction. Call `core.Start` when your application needs startup hooks. Create `Application.Handler` with a verifier and authorizer, and `Application.Admin` with a **different administrator verifier** and durable grant/config store. Provisioning remains an explicit Go composition root; it does not run runtime startup methods.
+`application.Compose` validates declarations before runtime construction. Call `core.Start` when your application needs startup hooks. Bind the compiled application with `deploy.Engine.Use` to discover module build targets, compare optional manifest copies, and register lifecycle/health checks. Create `Application.Handler` with a verifier and authorizer, and `Application.Admin` with a **different administrator verifier** and durable grant/config store. Provisioning remains an explicit Go composition root; it does not run runtime startup methods.
 
 ## Routes and identity
 

@@ -51,3 +51,17 @@ That command is documentation only. Protected pools/tables remain protected; the
 | Cross-process/cross-machine registry coordination | Retained legacy client/workflow; generic applications must integrate registry leases explicitly |
 
 Do not execute the legacy wizard against arbitrary application resources. It still contains Attestra-specific names and inventories by design. This boundary preserves the working operator implementation while exposing reusable pieces for incremental migration.
+
+## Installing before the first merge
+
+Go's `go install package@commit` checks the nested module's default-branch metadata. While `main` contains only the initial README, that check can report `no matching versions for query latest`. Until the first merge/tag, install using an explicit dependency in a temporary ordinary Go module (no local replacements):
+
+```sh
+mkdir apexfission-install
+cd apexfission-install
+go mod init example.com/apexfission-install
+go mod edit -require=github.com/lambdawalker/go.apexfission.aws.auth/deploy@v0.0.0-20261028150928-41156da59a1b
+go install -mod=mod github.com/lambdawalker/go.apexfission.aws.auth/deploy/cmd/apexfission
+```
+
+That exact pinned installation and `apexfission init` were executed successfully. Use the reviewed release/commit when adopting later changes; no merge or release tag is implied by this workaround.

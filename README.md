@@ -30,7 +30,7 @@ See [integration](docs/integration.md), [deployment](docs/deployment.md), [secur
 
 ## Installation
 
-Until reviewed releases are tagged, use the reviewed commit SHA:
+Until reviewed releases are tagged, use the reviewed commit SHA. Before the first merge, nested CLI installation needs the [pinned-module workaround](docs/deployment.md#installing-before-the-first-merge); the ordinary commands below apply once the module exists on the default branch:
 
 ```sh
 go get github.com/lambdawalker/go.apexfission.aws.auth@<reviewed-commit>
