@@ -1,0 +1,3 @@
+name: apexfission-sales
+runtime: go
+description: Sales consumer composing Apexfission authentication, APIs, and administration
