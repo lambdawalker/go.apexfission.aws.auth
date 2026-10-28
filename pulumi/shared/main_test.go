@@ -1,0 +1,96 @@
+package shared
+
+import (
+	"archive/zip"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+)
+
+type indexMocks struct {
+	mu        sync.Mutex
+	resources map[string]pulumi.MockResourceArgs
+}
+
+func (m *indexMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+	return resource.NewPropertyMapFromMap(map[string]any{"accountId": "123456789012", "name": "us-east-2"}), nil
+}
+func (m *indexMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.resources[args.Name] = args
+	out := args.Inputs.Copy()
+	out["arn"] = resource.NewStringProperty("arn:example:" + args.Name)
+	switch args.TypeToken {
+	case "aws:acm/certificate:Certificate":
+		out["domainValidationOptions"] = resource.NewArrayProperty([]resource.PropertyValue{resource.NewObjectProperty(resource.NewPropertyMapFromMap(map[string]any{"resourceRecordName": "_token.index.example.com", "resourceRecordType": "CNAME", "resourceRecordValue": "_token.acm-validations.aws"}))})
+	case "aws:apigatewayv2/api:Api":
+		out["apiEndpoint"] = resource.NewStringProperty("https://abc.execute-api.us-east-2.amazonaws.com")
+		out["executionArn"] = resource.NewStringProperty("arn:aws:execute-api:us-east-2:123456789012:abc")
+	case "aws:apigatewayv2/domainName:DomainName":
+		cfg := out["domainNameConfiguration"].ObjectValue().Copy()
+		cfg["targetDomainName"] = resource.NewStringProperty("target.execute-api.us-east-2.amazonaws.com")
+		out["domainNameConfiguration"] = resource.NewObjectProperty(cfg)
+	}
+	return args.Name + "-id", out, nil
+}
+func TestIndexInfrastructure(t *testing.T) {
+	for _, zone := range []string{"", "Z123EXAMPLE"} {
+		t.Run("zone="+zone, func(t *testing.T) {
+			root := t.TempDir()
+			os.MkdirAll(filepath.Join(root, "infra-index"), 0755)
+			os.MkdirAll(filepath.Join(root, "dist"), 0755)
+			f, _ := os.Create(filepath.Join(root, "dist/index.zip"))
+			z := zip.NewWriter(f)
+			entry, _ := z.Create("bootstrap")
+			entry.Write([]byte("test"))
+			z.Close()
+			f.Close()
+			data, _ := os.ReadFile(filepath.Join(root, "dist/index.zip"))
+			os.WriteFile(filepath.Join(root, "dist/admin.zip"), data, 0600)
+			t.Chdir(filepath.Join(root, "infra-index"))
+			t.Setenv("PULUMI_CONFIG", `{"attestra-shared:deploymentPrefix":"next","attestra-shared:expectedAccountId":"123456789012","attestra-shared:expectedRegion":"us-east-2","attestra-shared:adminDomain":"admin.example.com","attestra-shared:domain":"index.example.com","attestra-shared:sourceHash":"test","attestra-shared:route53ZoneId":"`+zone+`"}`)
+			m := &indexMocks{resources: map[string]pulumi.MockResourceArgs{}}
+			if e := pulumi.RunErr(Deploy, pulumi.WithMocks("attestra-shared", "next-shared", m)); e != nil {
+				t.Fatal(e)
+			}
+			if !strings.Contains(m.resources["admin-reset-invoke"].Inputs["policy"].StringValue(), "function:attestra-backend-reset-next-*") {
+				t.Fatal("reset IAM crosses deployment scope")
+			}
+			if m.resources["index-write"].Inputs["authorizationType"].StringValue() != "AWS_IAM" {
+				t.Fatal("unauthenticated registry writes")
+			}
+			if m.resources["index-read"].Inputs["authorizationType"].StringValue() != "NONE" {
+				t.Fatal("discovery is not public")
+			}
+			if m.resources["index-handler"].Inputs["reservedConcurrentExecutions"].NumberValue() != -1 {
+				t.Fatal("registry reserves scarce Lambda capacity")
+			}
+			_, dns := m.resources["index-hostname"]
+			if dns != (zone != "") {
+				t.Fatal("wrong DNS provider path")
+			}
+			if !m.resources["admin-runtime"].RegisterRPC.GetProtect() || !m.resources["admin-runtime"].Inputs["deletionProtectionEnabled"].BoolValue() {
+				t.Fatal("runtime data lacks deletion protection")
+			}
+			pool := m.resources["attestra-admins"].Inputs
+			if pool["mfaConfiguration"].StringValue() != "ON" || !pool["adminCreateUserConfig"].ObjectValue()["allowAdminCreateUserOnly"].BoolValue() {
+				t.Fatal("admin identity boundary weakened")
+			}
+			if m.resources["admin-api"].Inputs["corsConfiguration"].HasValue() {
+				t.Fatal("admin API should remain same origin")
+			}
+			if m.resources["admin-publish"].Inputs["authorizerId"].StringValue() != "admin-jwt-id" {
+				t.Fatal("admin publish lacks dedicated authorizer")
+			}
+			if !m.resources["environment-registry"].RegisterRPC.GetProtect() {
+				t.Fatal("shared registry lacks deletion protection")
+			}
+		})
+	}
+}

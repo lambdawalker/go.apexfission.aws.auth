@@ -42,3 +42,22 @@ orders, err := infrastructure.NewTable(ctx, "sales-orders", "id",
 For a currently unmanaged resource, use `pulumi.Import(pulumi.ID(physicalID))` at the precise resource constructor, retain protect, and compare every immutable argument. If an existing component does not expose the child migration options needed, retain direct resource declarations rather than forcing a replacement. Exported component outputs can compose with those retained resources.
 
 `TestProtectedTableAndAlias` verifies aliases/protection reach the Pulumi engine request. This is **not** a verified alias map for existing Attestra resources, and no import/preview against Attestra state was performed. Broad child-resource migration support remains a deliberate follow-up rather than an unsafe guess about state.
+
+## Fresh parallel deployments
+The new pulumi/backend, pulumi/shared and deploy/wizard packages provide an
+alternative to adopting live resources: deploy an isolated complete
+Attestra-compatible backend and shared index/admin. They deliberately require
+new project names (attestra-backend, attestra-shared) and explicit deployment
+identity. The original state, users and data are not imported.
+
+These packages preserve the existing runtime configuration schema and index
+publication protocol; they are distinct from the smaller generic NewAuth and
+NewAdmin components. A fresh backend references an external verified SES identity
+and never owns its DKIM or verification records. Preserve that identity separately
+before destroying its legacy owner.
+
+A prefixed deployment and the later unprefixed final deployment have different
+Cognito pools, passkeys, runtime tables and registry entries. The Android client
+must use the corresponding exported environment configuration. Testing the
+prefixed stack does not certify final domain bindings or live email/passkey
+flows; verify them after the final deployment too.

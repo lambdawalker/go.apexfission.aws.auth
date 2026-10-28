@@ -13,17 +13,21 @@ import (
 type ResetClient interface {
 	Invoke(context.Context, envreset.Request) (envreset.Status, error)
 }
-type LambdaResetClient struct{ HTTP awshttp.Client }
+type LambdaResetClient struct {
+	HTTP           awshttp.Client
+	FunctionPrefix string
+}
 
 func (c LambdaResetClient) Invoke(ctx context.Context, q envreset.Request) (envreset.Status, error) {
-	if !runtimeconfig.ValidEnvironment(q.Environment) {
+	name, targetErr := resetFunctionName(c.FunctionPrefix, q.Environment)
+	if targetErr != nil {
 		return envreset.Status{}, runtimeconfig.ErrInvalid
 	}
 	body, e := json.Marshal(q)
 	if e != nil {
 		return envreset.Status{}, e
 	}
-	target := "https://lambda." + c.HTTP.Config.Region + ".amazonaws.com/2015-03-31/functions/" + url.PathEscape("attestra-reset-"+q.Environment) + "/invocations"
+	target := "https://lambda." + c.HTTP.Config.Region + ".amazonaws.com/2015-03-31/functions/" + url.PathEscape(name) + "/invocations"
 	status, data, e := c.HTTP.Do(ctx, "lambda", "POST", target, body, map[string]string{"Content-Type": "application/json", "X-Amz-Invocation-Type": "RequestResponse"})
 	if e != nil || status != 200 {
 		return envreset.Status{}, errors.New("reset_unavailable")
@@ -47,4 +51,17 @@ func (c LambdaResetClient) Invoke(ctx context.Context, q envreset.Request) (envr
 		return envreset.Status{}, errors.New("reset_unavailable")
 	}
 	return *reply.Status, nil
+}
+
+func resetFunctionName(prefix, environment string) (string, error) {
+	if !runtimeconfig.ValidEnvironment(environment) {
+		return "", runtimeconfig.ErrInvalid
+	}
+	if prefix == "" {
+		prefix = "attestra-reset-"
+	}
+	if prefix != "attestra-reset-" && prefix != "attestra-backend-reset-" {
+		return "", runtimeconfig.ErrInvalid
+	}
+	return prefix + environment, nil
 }
