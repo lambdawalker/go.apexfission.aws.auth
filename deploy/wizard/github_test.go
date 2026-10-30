@@ -1,9 +1,12 @@
 package wizard
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -72,6 +75,62 @@ func TestGitHubSetupExportsReviewedScopeWithoutSecretSettings(t *testing.T) {
 	for _, call := range r.calls {
 		if strings.Contains(call, "pulumi up") {
 			t.Fatal("setup deployed infrastructure")
+		}
+	}
+}
+
+func TestPrepareGitHubAuthorization(t *testing.T) {
+	policy := filepath.Join(t.TempDir(), "reviewed policy.json")
+	if err := os.WriteFile(policy, []byte(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListBucket","Resource":"arn:aws:s3:::state"}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, scope, input, policy, shared, backend string
+		interactive, wantSetup, wantErr             bool
+	}{
+		{name: "policy", scope: "both", input: "policy\n\"" + policy + "\"\n", interactive: true, wantSetup: true, policy: policy},
+		{name: "roles", scope: "both", input: "roles\narn:aws:iam::123456789012:role/shared\narn:aws:iam::123456789012:role/backend\n", interactive: true, wantSetup: true, shared: "arn:aws:iam::123456789012:role/shared", backend: "arn:aws:iam::123456789012:role/backend"},
+		{name: "backend only", scope: "backend", input: "roles\narn:aws:iam::123456789012:role/backend\n", interactive: true, wantSetup: true, backend: "arn:aws:iam::123456789012:role/backend"},
+		{name: "defer", scope: "both", input: "skip\n", interactive: true},
+		{name: "empty defers", scope: "both", input: "\n", interactive: true},
+		{name: "invalid selection retries", scope: "both", input: "invalid\nskip\n", interactive: true},
+		{name: "missing policy file", scope: "both", input: "policy\nmissing.json\n", interactive: true, wantErr: true, wantSetup: true},
+		{name: "empty role rejects", scope: "backend", input: "roles\n\n", interactive: true, wantErr: true, wantSetup: true},
+		{name: "partial roles cancel atomically", scope: "both", input: "roles\narn:aws:iam::123456789012:role/shared\n", interactive: true, wantErr: true, wantSetup: true},
+		{name: "EOF cancels", scope: "both", interactive: true, wantErr: true, wantSetup: true},
+		{name: "unattended does not read", scope: "both", wantSetup: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			x := execution{c: choices{Scope: tt.scope, GitHubSetup: true}, o: Options{Output: &out, reader: bufio.NewReader(strings.NewReader(tt.input))}}
+			err := x.prepareGitHubAuthorization(tt.interactive)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v", err)
+			}
+			if x.c.GitHubSetup != tt.wantSetup || x.c.GitHubPolicy != tt.policy || x.c.GitHubSharedRoleARN != tt.shared || x.c.GitHubBackendRoleARN != tt.backend {
+				t.Fatalf("unexpected choices: %+v", x.c)
+			}
+			if !tt.interactive && out.Len() != 0 {
+				t.Fatal("unattended setup prompted")
+			}
+		})
+	}
+}
+
+func TestPrepareGitHubAuthorizationReusesSavedAnswers(t *testing.T) {
+	for _, c := range []choices{
+		{Scope: "both", GitHubSetup: true, GitHubPolicy: "reviewed.json"},
+		{Scope: "both", GitHubSetup: true, GitHubSharedRoleARN: "shared", GitHubBackendRoleARN: "backend"},
+		{Scope: "shared", GitHubSetup: true, GitHubSharedRoleARN: "shared"},
+		{Scope: "backend", GitHubSetup: true, GitHubBackendRoleARN: "backend"},
+	} {
+		var out bytes.Buffer
+		x := execution{c: c, o: Options{Output: &out, reader: bufio.NewReader(strings.NewReader(""))}}
+		if err := x.prepareGitHubAuthorization(true); err != nil {
+			t.Fatal(err)
+		}
+		if out.Len() != 0 || x.c != c {
+			t.Fatal("saved authorization was prompted or changed")
 		}
 	}
 }

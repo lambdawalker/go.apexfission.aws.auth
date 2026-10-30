@@ -141,6 +141,22 @@ configures selected GitHub environments without deploying. Supply
 `--github-policy /path/to/reviewed-policy.json` for new OIDC deployment roles,
 or compatible `--github-shared-role-arn` / `--github-backend-role-arn` references.
 Interactive deploy offers setup once; `--github-setup` enables it explicitly.
+If the selected targets have no saved policy/role inputs, the wizard asks for a
+reviewed policy file (`policy`), the missing per-target role ARNs (`roles`), or
+`skip` (the default) to defer GitHub setup and continue local deployment. Complete
+saved inputs are reused without another authorization question. EOF cancels;
+it never approves setup. Policy paths may contain spaces and surrounding quotes.
+
+To resume local deployment after a GitHub setup prerequisite error on Windows:
+
+```powershell
+.\deploy.bat --operation deploy --github-setup=false
+```
+
+This preserves saved answers and the encrypted vault. To configure GitHub later,
+use `--operation setup-github`, supplying `--github-policy` or the selected targets'
+`--github-shared-role-arn` / `--github-backend-role-arn` flags. Unattended setup still
+requires explicit inputs (or already-existing deterministic roles) and `--yes`.
 Authenticate `gh` first. The consumer must include `.github/workflows/deploy.yml`
 and `deploy-target.yml`; setup fingerprints both, verifies the exact repository
 and operator identity, preserves unrelated settings/protections, and uses the
