@@ -141,3 +141,101 @@ func TestOriginIsUserProvidedAndSeparateFromIssuer(t *testing.T) {
 		t.Fatal("invalid origin accepted")
 	}
 }
+
+func TestFailedExtractionAllowsManualReview(t *testing.T) {
+	s, m, _, _, r := extractionFixture(t)
+	r.Extraction = &Extraction{Status: "failed", Error: "extraction_unavailable"}
+	m.records[r.ID] = r
+	input := ReviewRequest{Revision: r.Revision, Data: CardData{FullName: "Entered Manually", DocumentNumber: "000045"}, OriginCountry: "MX"}
+	saved, err := s.Review(context.Background(), r.Owner, r.ID, input)
+	if err != nil {
+		t.Fatal("manual review rejected", err)
+	}
+	if saved.Reviewed == nil || saved.Reviewed.Data != input.Data || saved.Reviewed.OriginCountry != "MX" || saved.Extraction.Status != "failed" || !saved.Extraction.Data.Empty() {
+		t.Fatal("manual review did not preserve extraction outcome")
+	}
+	replay, err := s.Review(context.Background(), r.Owner, r.ID, input)
+	if err != nil || replay.Revision != saved.Revision {
+		t.Fatal("lost response retry changed review", err)
+	}
+	input.Data.FullName = "Stale edit"
+	if _, err = s.Review(context.Background(), r.Owner, r.ID, input); err != ErrConflict {
+		t.Fatal("stale edit accepted", err)
+	}
+	if _, err = s.Review(context.Background(), "other", r.ID, input); err != ErrNotFound {
+		t.Fatal("cross-owner review accepted", err)
+	}
+}
+
+func TestManualReviewRequiresRetainedValidatedImagesAndTerminalExtraction(t *testing.T) {
+	for _, tc := range []struct{ state, extraction string }{
+		{"ready", "pending"}, {"ready", ""}, {"ready", "unknown"}, {"uploading", "failed"}, {"finalizing", "failed"}, {"failed", "failed"}, {"requires_recapture", "failed"}, {"cancelled", "failed"},
+	} {
+		t.Run(tc.state+"/"+tc.extraction, func(t *testing.T) {
+			s, m, _, _, r := extractionFixture(t)
+			r.State = tc.state
+			r.Extraction = nil
+			if tc.extraction != "" {
+				r.Extraction = &Extraction{Status: tc.extraction}
+			}
+			m.records[r.ID] = r
+			_, err := s.Review(context.Background(), r.Owner, r.ID, ReviewRequest{Revision: r.Revision, Data: CardData{FullName: "Manual"}})
+			if err != ErrConflict {
+				t.Fatal("review should be blocked", err)
+			}
+		})
+	}
+	s, m, _, now, r := extractionFixture(t)
+	r.Extraction = &Extraction{Status: "failed"}
+	m.records[r.ID] = r
+	*now = time.Unix(r.DeleteAfter, 0)
+	if _, err := s.Review(context.Background(), r.Owner, r.ID, ReviewRequest{Revision: r.Revision, Data: CardData{FullName: "Manual"}}); err != ErrExpired {
+		t.Fatal("expired manual review accepted", err)
+	}
+}
+
+func TestReadyWithoutExtractionCanBeReviewedManually(t *testing.T) {
+	s, m, _, _, r := extractionFixture(t)
+	r.Extraction = nil
+	r.Work = "cleanup"
+	r.Due = r.DeleteAfter
+	m.records[r.ID] = r
+	got, err := s.Get(context.Background(), r.Owner, r.ID)
+	if err != nil || got.Extraction == nil || got.Extraction.Status != "failed" {
+		t.Fatalf("ready evidence without an extraction job must open manual review: %+v %v", got.Extraction, err)
+	}
+	_, err = s.Review(context.Background(), r.Owner, r.ID, ReviewRequest{Revision: got.Revision, OriginCountry: "MX", Data: CardData{FullName: "Manual Person"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOverdueExtractionBecomesManualReviewAndFencesWorker(t *testing.T) {
+	s, m, _, now, r := extractionFixture(t)
+	before := r
+	*now = time.Unix(r.Due+301, 0)
+	got, err := s.Get(context.Background(), r.Owner, r.ID)
+	if err != nil || got.Extraction == nil || got.Extraction.Status != "failed" {
+		t.Fatalf("abandoned extraction must terminate: %+v %v", got.Extraction, err)
+	}
+	if got.Work != "cleanup" || got.LeaseUntil != 0 || got.Revision <= before.Revision {
+		t.Fatal("missing durable recovery/fence")
+	}
+	if err := s.finishExtraction(context.Background(), before, CardData{FullName: "Late"}, nil); err != ErrConflict {
+		t.Fatal("late worker overwrote manual entry state", err)
+	}
+	if m.records[r.ID].Extraction.Status != "failed" {
+		t.Fatal("not persisted")
+	}
+}
+
+func TestActiveExtractionLeaseIsNotFailedByRead(t *testing.T) {
+	s, m, _, now, r := extractionFixture(t)
+	r.Due = now.Unix() - 400
+	r.LeaseUntil = now.Unix() + 60
+	m.records[r.ID] = r
+	got, err := s.Get(context.Background(), r.Owner, r.ID)
+	if err != nil || got.Extraction.Status != "pending" {
+		t.Fatal("active extraction interrupted", err)
+	}
+}
