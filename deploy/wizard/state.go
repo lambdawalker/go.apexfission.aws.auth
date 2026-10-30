@@ -28,6 +28,38 @@ func (x *execution) verifyState() error {
 	if e := x.aws(nil, "s3api", "head-bucket", "--bucket", bucket, "--expected-bucket-owner", x.c.Account); e != nil {
 		return fmt.Errorf("state bucket ownership/read access: %w", e)
 	}
+	var location struct{ LocationConstraint string }
+	if e := x.aws(&location, "s3api", "get-bucket-location", "--bucket", bucket, "--expected-bucket-owner", x.c.Account); e != nil {
+		return e
+	}
+	region := location.LocationConstraint
+	if region == "" {
+		region = "us-east-1"
+	}
+	if region == "EU" {
+		region = "eu-west-1"
+	}
+	if region != x.c.Region {
+		return errors.New("state bucket region does not match selected region")
+	}
+	var encryption struct {
+		ServerSideEncryptionConfiguration struct {
+			Rules []struct{ ApplyServerSideEncryptionByDefault struct{ SSEAlgorithm string } }
+		}
+	}
+	if e := x.aws(&encryption, "s3api", "get-bucket-encryption", "--bucket", bucket, "--expected-bucket-owner", x.c.Account); e != nil {
+		return e
+	}
+	encrypted := false
+	for _, rule := range encryption.ServerSideEncryptionConfiguration.Rules {
+		algorithm := rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm
+		if algorithm == "AES256" || algorithm == "aws:kms" || algorithm == "aws:kms:dsse" {
+			encrypted = true
+		}
+	}
+	if !encrypted {
+		return errors.New("state bucket must have default server-side encryption")
+	}
 	var version struct{ Status string }
 	if e := x.aws(&version, "s3api", "get-bucket-versioning", "--bucket", bucket, "--expected-bucket-owner", x.c.Account); e != nil {
 		return e

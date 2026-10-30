@@ -82,7 +82,7 @@ func deployAdmin(ctx *pulumi.Context, cfg *config.Config) (*dynamodb.Table, erro
 		return nil, e
 	}
 	archive, _ := filepath.Abs("../dist/admin.zip")
-	fn, e := lambda.NewFunction(ctx, "admin-handler", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), Timeout: pulumi.Int(20), MemorySize: pulumi.Int(256), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_FUNCTION_PREFIX": pulumi.String("attestra-backend-reset-"), "RUNTIME_TABLE": table.Name, "ADMIN_ISSUER": issuer, "ADMIN_CLIENT_ID": client.ID(), "ADMIN_ORIGIN": pulumi.String("https://" + domain), "ADMIN_LOGIN_DOMAIN": loginURL}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
+	fn, e := lambda.NewFunction(ctx, "admin-handler", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Timeout: pulumi.Int(20), MemorySize: pulumi.Int(256), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_FUNCTION_PREFIX": pulumi.String("attestra-backend-reset-"), "RUNTIME_TABLE": table.Name, "ADMIN_ISSUER": issuer, "ADMIN_CLIENT_ID": client.ID(), "ADMIN_ORIGIN": pulumi.String("https://" + domain), "ADMIN_LOGIN_DOMAIN": loginURL}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
 	if e != nil {
 		return nil, e
 	}

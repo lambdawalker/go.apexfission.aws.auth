@@ -147,6 +147,10 @@ func (r *cloudRunner) Run(ctx context.Context, dir string, env []string, name st
 		switch args[0] + " " + args[1] {
 		case "sts get-caller-identity":
 			return []byte(`{"Account":"123456789012"}`), nil
+		case "s3api get-bucket-location":
+			return []byte(`{"LocationConstraint":"us-east-1"}`), nil
+		case "s3api get-bucket-encryption":
+			return []byte(`{"ServerSideEncryptionConfiguration":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}}`), nil
 		case "s3api get-bucket-versioning":
 			return []byte(`{"Status":"Enabled"}`), nil
 		case "s3api get-public-access-block":

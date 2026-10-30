@@ -15,7 +15,7 @@ Import `github.com/lambdawalker/go.apexfission.aws.auth/deploy/wizard`. The cons
 
 ## Inputs
 
-With no arguments, a line-oriented wizard asks for the target, scope, operation, account, region, existing S3 state base, domains/sender, optional administrator, AWS profile, Route53 zone, Android associations, and environment class. Production also asks capacity values. Prefix defaults to `next`, logical environment to `dev`, region to `us-east-2`, base domain to `attestra.com`, and operation to `preview`. Enter `-` at the prefix prompt to choose the separate empty-prefix identity. Terminal-only secret prompts hide Pulumi passphrase and Cloudflare token input. They are retained only in memory for child processes; there is no vault persistence claim.
+With no arguments, a line-oriented wizard asks for the target, scope, operation, account, region, existing S3 state base, domains/sender, optional administrator, AWS profile, Route53 zone, Android associations, and environment class. Production also asks capacity values. Prefix defaults to `next`, logical environment to `dev`, region to `us-east-2`, base domain to `attestra.com`, and operation to `preview`. Enter `-` at the prefix prompt to choose the separate empty-prefix identity. Terminal-only secret prompts create/unlock an encrypted local credential vault and resolve the Pulumi passphrase and Cloudflare token. AWS SSO credentials remain managed by the AWS CLI.
 
 Flags override saved nonsecret choices:
 
@@ -41,7 +41,7 @@ Flags override saved nonsecret choices:
 | `--capture-worker-max-concurrency` | Worker maximum, default 2 |
 | `--environment-class` | Optional `test` or `production` |
 
-AWS CLI must have an existing usable session: environment credentials, OIDC, or `AWS_PROFILE`/`--profile` with SSO/session login performed separately. No access keys are persisted. CI supplies `PULUMI_CONFIG_PASSPHRASE` or `PULUMI_CONFIG_PASSPHRASE_FILE`; Cloudflare DNS uses `CLOUDFLARE_API_TOKEN`. Nonterminal execution never prompts for secrets. Custom `AWS_ENDPOINT_URL*` variables are rejected; configured AWS endpoint overrides are disabled. Commercial AWS ARN/endpoint forms are supported.
+Interactive AWS profiles use IAM Identity Center SSO; expired sessions stream device-code/no-browser login instructions and are reverified. CI uses OIDC/explicit environment credentials and never initiates interactive SSO. No AWS access keys or SSO sessions are copied into the new operator vault. CI supplies `PULUMI_CONFIG_PASSPHRASE` or `PULUMI_CONFIG_PASSPHRASE_FILE`; Cloudflare DNS uses `CLOUDFLARE_API_TOKEN`. Nonterminal execution never prompts for secrets. Custom `AWS_ENDPOINT_URL*` variables are rejected; configured AWS endpoint overrides are disabled. Commercial AWS ARN/endpoint forms are supported.
 
 Choices and immutable per-identity account/region/backend bindings are saved atomically as private `.attestra/wizard.json`. Existing bindings are checked early; a new binding is committed only after target verification and explicit authorization to mutate that identity. Failed first verification does not reserve a prefix. A failed preview never saves its requested choices. Secret values never appear in this JSON. `proofKey` is cryptographically generated once, sent to `pulumi config set --secret` over stdin, and preserved on subsequent runs; only Pulumi's encrypted stack config stores it. Protect your Pulumi passphrase separately. Existing plaintext proof keys are rejected. Selecting an existing deployed stack first invokes `pulumi config refresh --force` to recover the encrypted configuration and secrets-provider metadata from the latest deployment. This may write the local ignored Pulumi YAML (and CLI backup), including during preview/status/health, but does not change cloud configuration or issue `config set`. Optional settings absent from wizard flags are preserved. A never-deployed/partially initialized stack can retain valid target-bound local encrypted config; an existing empty stack without authoritative remote config or valid local YAML fails closed, rather than generating a replacement proof key. Recover the original config/checkout or inspect and explicitly remove an unused stack before retrying.
 
@@ -87,3 +87,78 @@ Prefix, scope and operation remain explicit wizard questions; legacy hostnames,
 certificate ARNs, proof keys, state bindings and vault credentials are never imported.
 Missing values still prompt. Corrupt/unsupported exports fail with instructions to
 re-export. AWS account/region/state verification still applies to imported values.
+
+Operator settings are saved per prefix, logical environment and scope, while the
+Version 1 `Choices` field remains available to existing CI settings consumers.
+Choose scope and environment first in interactive mode. `admin-index` and `all`
+are aliases for `shared` and `both`. Saved explicit empty strings are retained.
+Use `--reconfigure` to ask again, or `--operation reconfigure` to save choices
+without cloud access. Flags override saved choices; absent local fields can use
+`ATTESTRA_<FLAG_NAME>` variables (hyphens become underscores), then legacy imports
+and defaults. Select `--profile ""` in CI to clear a saved interactive profile.
+A nonempty profile deliberately excludes ambient AWS credentials; terminal users
+can renew an expired SSO session. CI never runs `aws sso login`.
+
+`--operation build` builds selected targets without AWS or Pulumi. The options
+`--build-jobs`, `--force-rebuild`, and `--clean-cache` control verified build reuse.
+
+Terminal secrets use the existing encrypted credential vault, scoped to the
+consumer root and prefix. The Pulumi passphrase is shared across environments of
+a prefix because they share the shared stack. Existing provider credentials are
+preserved; AWS credentials are never copied into the vault. Environment Pulumi
+and Cloudflare credentials take precedence. Vault creation and Pulumi passphrase
+creation require hidden confirmation; corrupt or wrong-password vaults fail
+without replacement. `--operation rotate-secrets` explicitly rotates only the
+vault encryption passphrase, retaining provider credentials and Pulumi encryption.
+Use `--replace-cloudflare-token` to replace the encrypted DNS token through a
+hidden prompt. An ambient Cloudflare token still takes precedence for this run.
+
+After each successful deploy preview, the saved Pulumi plan is applied with
+`--plan`. A real stdin terminal proceeds after a visible five-second countdown; Yes/Enter proceeds immediately; No/Escape/Ctrl-C, EOF or
+context cancellation aborts. Unattended deployment requires `--yes`. Previews
+containing delete, replace or destroy require a separate terminal phrase even
+with `--yes`. Embedders can provide `Options.ConfirmPreview` to own approval.
+The wizard verifies state bucket owner, selected region, versioning, default
+AES256/KMS encryption and all public access blocks before using it.
+
+Reconfiguration preserves explicit flags, including explicit empty strings and
+production capacity flags. Shared scope never asks backend capacity questions;
+valid saved backend production capacity is reused unless reconfigured.
+
+Interactive SSO renewal streams device authorization instructions to the terminal
+using `InteractiveRunner`, with browser-independent device-code login. Only an
+expired-token diagnostic (`ErrSSOSessionExpired` for custom runners) on a
+configured SSO profile triggers renewal; other STS failures stop. STS is verified
+again after login. The subprocess honours context cancellation. Countdown and
+explicit destructive-phrase reads both use cancellable readers and join their
+read worker before returning. `Options.ApprovalReader` and `ApprovalTicker` allow
+embedders/tests to exercise the actual approval logic with controlled input/time.
+
+## GitHub setup and deployment efficiency
+
+`--operation setup-github --scope all --github-repository owner/repo --yes`
+configures selected GitHub environments without deploying. Supply
+`--github-policy /path/to/reviewed-policy.json` for new OIDC deployment roles,
+or compatible `--github-shared-role-arn` / `--github-backend-role-arn` references.
+Interactive deploy offers setup once; `--github-setup` enables it explicitly.
+Authenticate `gh` first. The consumer must include `.github/workflows/deploy.yml`
+and `deploy-target.yml`; setup fingerprints both, verifies the exact repository
+and operator identity, preserves unrelated settings/protections, and uses the
+existing S3 identity lock. Incompatible branch restrictions or trust fail with
+manual recovery guidance. No Action is dispatched automatically.
+
+See [GitHub setup](../githubsetup/README.md) for managed settings, permissions,
+encrypted secret-delivery metadata, force/rotation flags and ownership boundaries.
+The five-second local confirmation never runs in GitHub Actions. Actions must use
+explicit noninteractive approval and OIDC, with scope/environment settings restored
+from the matching protected environment rather than invented defaults.
+
+The default builder uses content-addressed verified artifacts from `.lambda-cache`.
+Use `--build-jobs`, `--force-rebuild` and `--clean-cache` for bounded parallelism
+and explicit cache controls. Force/clean flags are invocation-only. Independent
+packages build concurrently; duplicate entrypoints share compiled archives.
+Dependency, asset, module/workspace, toolchain and build-option changes invalidate
+the cache; missing/corrupt entries rebuild. Unsupported `-toolexec` wrappers fail
+rather than silently accepting an incomplete fingerprint. Local cache locks fail
+closed and never steal another build's lock. Pulumi still plans infrastructure
+normally and uses actual base64 ZIP hashes for Lambda code changes.

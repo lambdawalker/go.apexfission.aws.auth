@@ -30,15 +30,15 @@ func PackageLambda(binary, archive string) (err error) {
 	if e := z.Close(); err == nil {
 		err = e
 	}
+	if err == nil {
+		err = out.Sync()
+	}
 	if e := out.Close(); err == nil {
 		err = e
 	}
 	if err != nil {
 		return err
 	}
-	// Windows cannot rename over an existing destination.
-	if err = os.Remove(archive); err != nil && !os.IsNotExist(err) {
-		return err
-	}
+	// Rename publishes atomically; never unlink the previous valid archive first.
 	return os.Rename(out.Name(), archive)
 }

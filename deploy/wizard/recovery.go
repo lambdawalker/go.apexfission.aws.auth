@@ -94,13 +94,10 @@ func (x *execution) completeApplied(p *publication) error {
 	if e := p.Desired.validate(); e != nil {
 		return errors.New("invalid saved deployment choices in recovery journal")
 	}
-	requested, saved := x.c, p.Desired
-	saved.Operation = requested.Operation
-	saved.Profile = requested.Profile
-	saved.Scope = requested.Scope
-	if requested != saved {
+	if recoveryConfig(x.c) != recoveryConfig(p.Desired) {
 		return errors.New("pending deployment uses different saved choices; resume the original choices before requesting another configuration")
 	}
+
 	if e := validateOutputs(x.c, p.Stack, p.Outputs); e != nil {
 		return e
 	}
@@ -155,4 +152,20 @@ func (x *execution) completeApplied(p *publication) error {
 		return nil
 	}
 	return work.publish(p)
+}
+
+// Keep an explicit projection: new operational/setup fields must not prevent
+// resuming an applied deployment, while resource and prerequisite changes do.
+func recoveryConfig(c choices) choices {
+	return choices{
+		Prefix: c.Prefix, Environment: c.Environment, Account: c.Account, Region: c.Region,
+		StateBackend: c.StateBackend, BaseDomain: c.BaseDomain,
+		SenderDomain: c.SenderDomain, SenderAddress: c.SenderAddress, AdminEmail: c.AdminEmail,
+		Route53ZoneID: c.Route53ZoneID, CloudflareZoneID: c.CloudflareZoneID,
+		APIDomain: c.APIDomain, AppOrigin: c.AppOrigin, IndexDomain: c.IndexDomain, AdminDomain: c.AdminDomain,
+		APICertificateARN: c.APICertificateARN, AppCertificateARN: c.AppCertificateARN,
+		IndexCertificateARN: c.IndexCertificateARN, AdminCertificateARN: c.AdminCertificateARN,
+		CaptureReserved: c.CaptureReserved, CaptureWorker: c.CaptureWorker, CaptureEnabled: c.CaptureEnabled,
+		EnvironmentClass: c.EnvironmentClass, AndroidAssociations: c.AndroidAssociations,
+	}
 }

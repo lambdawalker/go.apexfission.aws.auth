@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"github.com/lambdawalker/go.apexfission.aws.auth/pulumi/internal/guard"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/apigatewayv2"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/lambda"
@@ -24,7 +25,7 @@ func deployRuntime(ctx *pulumi.Context, cfg *config.Config, api *apigatewayv2.Ap
 		return e
 	}
 	archive, _ := filepath.Abs("../dist/app-config.zip")
-	fn, e := lambda.NewFunction(ctx, "app-config", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), Timeout: pulumi.Int(10), MemorySize: pulumi.Int(128), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RUNTIME_TABLE": pulumi.String(cfg.Require("runtimeTableName")), "ENVIRONMENT": pulumi.String(ctx.Stack())}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
+	fn, e := lambda.NewFunction(ctx, "app-config", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Timeout: pulumi.Int(10), MemorySize: pulumi.Int(128), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RUNTIME_TABLE": pulumi.String(cfg.Require("runtimeTableName")), "ENVIRONMENT": pulumi.String(ctx.Stack())}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
 	if e != nil {
 		return e
 	}
