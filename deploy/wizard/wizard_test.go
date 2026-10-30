@@ -71,6 +71,10 @@ func (r *fakeRunner) Run(_ context.Context, dir string, env []string, name strin
 	switch {
 	case strings.Contains(call, "get-caller-identity"):
 		return []byte(`{"Account":"123456789012"}`), nil
+	case strings.Contains(call, "get-bucket-location"):
+		return []byte(`{"LocationConstraint":"us-east-1"}`), nil
+	case strings.Contains(call, "get-bucket-encryption"):
+		return []byte(`{"ServerSideEncryptionConfiguration":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}}`), nil
 	case strings.Contains(call, "get-bucket-versioning"):
 		return []byte(`{"Status":"Enabled"}`), nil
 	case strings.Contains(call, "get-public-access-block"):
@@ -194,7 +198,7 @@ func TestExplicitProfileDropsAmbientCredentials(t *testing.T) {
 	}
 	for _, v := range capture.env {
 		if strings.Contains(v, "ambient-") {
-			t.Fatal("ambient credential survived explicit profile")
+			t.Fatal("ambient credentials survived explicit profile")
 		}
 	}
 }

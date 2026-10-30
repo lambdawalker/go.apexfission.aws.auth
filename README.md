@@ -54,3 +54,7 @@ Nested modules are released with their own tags (`pulumi/v0.1.0`, `deploy/v0.1.0
 ## Verify
 
 Run `go test -race ./...` and `go vet ./...` in each of: root, `pulumi`, `deploy`, `legacy/deploy`, `examples/sales`, and `examples/sales/infra`. CI runs the same module matrix and builds the sales Lambda archives.
+
+Lambda cache builds explicitly disable Go PGO (`-pgo=off`) for both dependency inspection and compilation. The fingerprint includes that build recipe. Automatic `default.pgo` and explicit `GOFLAGS=-pgo=...` profiles do not affect these Lambda builds; profile bytes are therefore not cache inputs.
+
+The wizard lists saved and imported logical environments in sorted order, with numbered selection or a custom name. Shared GitHub snapshots retain their reviewed environment when a workflow selects a different backend environment. Post-apply recovery compares resource and prerequisite settings while allowing build controls, GitHub setup settings and local profiles to change. Pulumi previews refresh provider state before reviewing changes.

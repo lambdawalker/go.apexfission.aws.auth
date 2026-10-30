@@ -3,6 +3,7 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/lambdawalker/go.apexfission.aws.auth/pulumi/internal/guard"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
@@ -71,7 +72,7 @@ func deployReset(ctx *pulumi.Context, cfg *config.Config, i *resetInventory) err
 		return string(b), e
 	}).(pulumi.StringOutput)
 	archive, _ := filepath.Abs("../dist/environment-reset.zip")
-	fn, e := lambda.NewFunction(ctx, "environment-reset", &lambda.FunctionArgs{Name: pulumi.String(ctx.Project() + "-reset-" + ctx.Stack()), Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Timeout: pulumi.Int(60), MemorySize: pulumi.Int(256), Code: pulumi.NewFileArchive(archive), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_MANIFEST": manifest, "RESET_TABLE": i.Control.Name, "ENVIRONMENT": pulumi.String(ctx.Stack()), "RESET_ENABLED": pulumi.String(fmt.Sprint(enabled))}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
+	fn, e := lambda.NewFunction(ctx, "environment-reset", &lambda.FunctionArgs{Name: pulumi.String(ctx.Project() + "-reset-" + ctx.Stack()), Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Timeout: pulumi.Int(60), MemorySize: pulumi.Int(256), Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_MANIFEST": manifest, "RESET_TABLE": i.Control.Name, "ENVIRONMENT": pulumi.String(ctx.Stack()), "RESET_ENABLED": pulumi.String(fmt.Sprint(enabled))}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
 	if e != nil {
 		return e
 	}

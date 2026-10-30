@@ -262,3 +262,96 @@ func TestSharedCodeOnlyChangeRemainsPreviewable(t *testing.T) {
 		t.Fatal("export-only source hash blocked code preview", e)
 	}
 }
+
+func TestRecoveryIgnoresInvocationControls(t *testing.T) {
+	for _, operation := range []string{"deploy", "publish"} {
+		t.Run(operation, func(t *testing.T) {
+			o, r, reg := deployFixture(t)
+			original := append([]string(nil), o.Args...)
+			o.Args = append(o.Args, "--force-rebuild", "--clean-cache", "--github-force-reconcile", "--github-rotate-secrets")
+			reg.failPublish = true
+			if err := Run(context.Background(), o); err == nil {
+				t.Fatal("expected publication failure")
+			}
+			o.Args = append(original, "--operation", operation)
+			r.calls = nil
+			reg.failPublish = false
+			if err := Run(context.Background(), o); err != nil {
+				t.Fatal(err)
+			}
+			for _, call := range r.calls {
+				if strings.HasPrefix(call, "pulumi") {
+					t.Fatal("recovery reran Pulumi")
+				}
+			}
+		})
+	}
+}
+
+func TestRecoveryRejectsResourceAndPrerequisiteChanges(t *testing.T) {
+	for _, args := range [][]string{{"--capture-worker-max-concurrency", "3"}, {"--admin-email", "different@attestra.com"}, {"--api-domain", "next.changed.attestra.com"}} {
+		o, _, reg := deployFixture(t)
+		reg.failPublish = true
+		if err := Run(context.Background(), o); err == nil {
+			t.Fatal("expected failed publication")
+		}
+		reg.failPublish = false
+		o.Args = append(o.Args, args...)
+		if err := Run(context.Background(), o); err == nil || !strings.Contains(err.Error(), "different saved choices") {
+			t.Fatalf("accepted changed desired configuration: %v", err)
+		}
+	}
+}
+func TestPreviewRefreshesProviderState(t *testing.T) {
+	for _, operation := range []string{"deploy", "preview"} {
+		t.Run(operation, func(t *testing.T) {
+			o, r, _ := deployFixture(t)
+			if operation == "preview" {
+				if err := Run(context.Background(), o); err != nil {
+					t.Fatal(err)
+				}
+				r.calls = nil
+			}
+			o.Args = append(o.Args, "--operation", operation)
+			if err := Run(context.Background(), o); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, call := range r.calls {
+				if strings.HasPrefix(call, "pulumi preview") {
+					found = true
+					if !strings.Contains(call, "--refresh") {
+						t.Fatal("preview did not refresh provider state", call)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("no preview")
+			}
+		})
+	}
+}
+
+func TestRecoveryProjectionExcludesSetupAndMachineChoices(t *testing.T) {
+	c := defaults()
+	saved := c
+	saved.GitHubSetup = true
+	saved.GitHubAsked = true
+	saved.GitHubForce = true
+	saved.GitHubRotate = true
+	saved.GitHubRepository = "other/repository"
+	saved.GitHubPolicy = "local-policy.json"
+	saved.GitHubSharedRoleARN = "shared"
+	saved.GitHubBackendRoleARN = "backend"
+	saved.GitHubSecretVersion = "2"
+	saved.BuildJobs = 8
+	saved.ForceRebuild = true
+	saved.CleanCache = true
+	saved.ReplaceCloudflareToken = true
+	saved.Profile = "other-machine"
+	saved.Operation = "publish"
+	saved.Scope = "backend"
+	if recoveryConfig(c) != recoveryConfig(saved) {
+		t.Fatal("operational/setup fields obstruct recovery")
+	}
+}

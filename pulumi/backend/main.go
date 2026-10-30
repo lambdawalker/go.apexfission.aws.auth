@@ -122,7 +122,7 @@ func Deploy(ctx *pulumi.Context) error {
 			return err
 		}
 	}
-	trigger, err := lambda.NewFunction(ctx, "cognito-grant-challenge", &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: challengeRole.Arn, Code: pulumi.NewFileArchive(challengeArchive), Timeout: pulumi.Int(10), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"TABLE_NAME": table.Name}}})
+	trigger, err := lambda.NewFunction(ctx, "cognito-grant-challenge", &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: challengeRole.Arn, Code: pulumi.NewFileArchive(challengeArchive), SourceCodeHash: guard.CodeHash(challengeArchive), Timeout: pulumi.Int(10), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"TABLE_NAME": table.Name}}})
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func Deploy(ctx *pulumi.Context) error {
 		}
 		fn, err := lambda.NewFunction(ctx, "email-"+name, &lambda.FunctionArgs{
 			Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")},
-			Role: roles[name].Arn, Code: pulumi.NewFileArchive(archives[name]), Timeout: pulumi.Int(25), MemorySize: pulumi.Int(256),
+			Role: roles[name].Arn, Code: pulumi.NewFileArchive(archives[name]), SourceCodeHash: guard.CodeHash(archives[name]), Timeout: pulumi.Int(25), MemorySize: pulumi.Int(256),
 			Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{
 				"TABLE_NAME": table.Name, "POOL_ID": pool.ID(), "CLIENT_ID": client.ID(), "APP_ORIGIN": pulumi.String(origin),
 				"SENDER_ADDRESS": pulumi.String(senderAddress), "PROOF_KEY": proofKey,
@@ -220,7 +220,7 @@ func Deploy(ctx *pulumi.Context) error {
 		if e != nil {
 			return e
 		}
-		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archives[spec.name]), Timeout: pulumi.Int(20)})
+		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archives[spec.name]), SourceCodeHash: guard.CodeHash(archives[spec.name]), Timeout: pulumi.Int(20)})
 		if e != nil {
 			return e
 		}
@@ -270,7 +270,7 @@ func Deploy(ctx *pulumi.Context) error {
 			}
 			dependencies = append(dependencies, grant)
 		}
-		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(authArchives[spec.name]), Timeout: pulumi.Int(20), Environment: &lambda.FunctionEnvironmentArgs{Variables: variables}}, pulumi.DependsOn(dependencies))
+		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(authArchives[spec.name]), SourceCodeHash: guard.CodeHash(authArchives[spec.name]), Timeout: pulumi.Int(20), Environment: &lambda.FunctionEnvironmentArgs{Variables: variables}}, pulumi.DependsOn(dependencies))
 		if e != nil {
 			return e
 		}

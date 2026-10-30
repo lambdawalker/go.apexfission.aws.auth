@@ -3,6 +3,7 @@ package vault
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
@@ -210,4 +211,15 @@ func RotatePassphrase(v *Vault, values Credentials, phrase string) (*Vault, erro
 	return next, nil
 }
 
-func (v *Vault) Close() { clear(v.key) }
+func (v *Vault) Close() { clear(v.key); v.key = nil }
+
+// DeriveKey returns a domain-separated metadata key valid only for this unlocked vault.
+// Callers must clear their copy after use; it must never be persisted unencrypted.
+func (v *Vault) DeriveKey(domain string) []byte {
+	if len(v.key) == 0 {
+		return nil
+	}
+	mac := hmac.New(sha256.New, v.key)
+	mac.Write([]byte("attestra-vault-derived-v1\x00" + domain))
+	return mac.Sum(nil)
+}
