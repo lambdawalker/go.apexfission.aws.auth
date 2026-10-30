@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"fmt"
+	"github.com/lambdawalker/go.apexfission.aws.auth/core"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -87,5 +88,31 @@ func TestFingerprintIncludesAssemblerIdentity(t *testing.T) {
 	b, e := fingerprint(context.Background(), root, "./cmd")
 	if e != nil || a == b {
 		t.Fatal("assembler replacement did not invalidate fingerprint", e)
+	}
+}
+
+func TestBuildDoesNotRequireWorkingGitMetadata(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"cmd", "bin", ".git"} {
+		if e := os.Mkdir(filepath.Join(root, dir), 0700); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for name, content := range map[string]string{"go.mod": "module fixture\ngo 1.26.6\n", "cmd/main.go": "package main\nfunc main(){}"} {
+		if e := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	marker := filepath.Join(root, "git-invoked")
+	brokenGit := fmt.Sprintf("#!/bin/sh\necho invoked > %q\nexit 128\n", marker)
+	if e := os.WriteFile(filepath.Join(root, "bin", "git"), []byte(brokenGit), 0700); e != nil {
+		t.Fatal(e)
+	}
+	t.Setenv("PATH", filepath.Join(root, "bin")+":"+os.Getenv("PATH"))
+	if e := Lambdas(context.Background(), root, []core.BuildTarget{{Name: "fixture", Package: "./cmd"}}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := os.Stat(marker); !os.IsNotExist(e) {
+		t.Fatalf("build consulted broken Git metadata: %v", e)
 	}
 }

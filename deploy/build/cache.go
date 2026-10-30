@@ -69,7 +69,7 @@ func fingerprint(ctx context.Context, root, pkg string) (string, error) {
 	if e = flagFiles(root, environment["GOFLAGS"], files, overlays); e != nil {
 		return "", e
 	}
-	data, e := goOutput(ctx, root, "list", "-pgo=off", "-deps", "-json", "-tags", "lambda.norpc", pkg)
+	data, e := goOutput(ctx, root, "list", "-buildvcs=false", "-pgo=off", "-deps", "-json", "-tags", "lambda.norpc", pkg)
 	if e != nil {
 		return "", e
 	}
