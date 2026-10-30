@@ -84,7 +84,7 @@ func (c client) ensureRole(t Target) (string, error) {
 		return role.Arn, nil
 	}
 	if c.o.PolicyFile == "" {
-		return "", errors.New("deployment role missing: provide --github-policy with a reviewed least-privilege IAM policy JSON, or --github-role-arn for an existing exact-scoped role; no AdministratorAccess is generated")
+		return "", errors.New("deployment role missing: provide --github-policy with a reviewed least-privilege IAM policy JSON, or --github-shared-role-arn / --github-backend-role-arn for existing exact-scoped roles (or use --github-setup=false to deploy locally and configure GitHub later); no AdministratorAccess is generated")
 	}
 	if _, e := readPolicy(c.o.PolicyFile); e != nil {
 		return "", e

@@ -19,6 +19,83 @@ func envValue(env []string, key string) string {
 	}
 	return ""
 }
+
+// prepareGitHubAuthorization collects first-time OIDC setup inputs. Unattended
+// callers retain deterministic role discovery and fail closed in reconciliation.
+func (x *execution) prepareGitHubAuthorization(interactive bool) error {
+	needShared := x.c.Scope != "backend" && x.c.GitHubSharedRoleARN == ""
+	needBackend := x.c.Scope != "shared" && x.c.GitHubBackendRoleARN == ""
+	if !interactive || x.c.GitHubPolicy != "" || (!needShared && !needBackend) {
+		return nil
+	}
+	read := func(prompt string) (string, error) {
+		fmt.Fprint(x.o.Output, prompt)
+		line, err := x.o.reader.ReadString('\n')
+		if err != nil {
+			return "", errors.New("GitHub authorization selection cancelled; no setup was performed")
+		}
+		return strings.TrimSpace(line), nil
+	}
+	fmt.Fprintln(x.o.Output, "GitHub Actions needs an AWS deployment role for each target. New roles require a reviewed IAM policy JSON; existing roles must trust this repository and GitHub environment exactly.")
+	for {
+		mode, err := read("GitHub AWS authorization (policy/roles/skip) [skip]: ")
+		if err != nil {
+			return err
+		}
+		switch strings.ToLower(mode) {
+		case "", "skip":
+			x.c.GitHubSetup = false
+			x.c.GitHubAsked = true
+			fmt.Fprintln(x.o.Output, "GitHub setup deferred. Local deployment can continue; run --operation setup-github later.")
+			return nil
+		case "policy":
+			path, err := read("Reviewed deployment IAM policy JSON file: ")
+			if err != nil {
+				return err
+			}
+			path = strings.Trim(path, "\"")
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(x.o.Root, path)
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("read reviewed GitHub policy: %w", err)
+			}
+			if !json.Valid(b) {
+				return errors.New("reviewed GitHub policy file is not valid JSON")
+			}
+			x.c.GitHubPolicy = path
+			return nil
+		case "roles":
+			// Commit both answers together so cancellation cannot save partial input.
+			shared, backend := x.c.GitHubSharedRoleARN, x.c.GitHubBackendRoleARN
+			for _, target := range []struct {
+				needed bool
+				label  string
+				value  *string
+			}{
+				{needShared, "Admin/index", &shared}, {needBackend, "Backend", &backend},
+			} {
+				if !target.needed {
+					continue
+				}
+				role, err := read(target.label + " existing deployment role ARN: ")
+				if err != nil {
+					return err
+				}
+				if role == "" {
+					return errors.New("existing role ARN is required; use skip to defer GitHub setup")
+				}
+				*target.value = role
+			}
+			x.c.GitHubSharedRoleARN, x.c.GitHubBackendRoleARN = shared, backend
+			return nil
+		default:
+			fmt.Fprintln(x.o.Output, "Choose policy, roles, or skip.")
+		}
+	}
+}
+
 func (x *execution) setupGitHub() error {
 	if x.c.GitHubRepository == "" {
 		b, e := x.run("gh", "repo", "view", "--json", "nameWithOwner")
@@ -100,7 +177,11 @@ func (x *execution) setupGitHub() error {
 	if err := save(path, state); err != nil {
 		return err
 	}
-	fmt.Fprintf(x.o.Output, "Configuring GitHub targets for %s using reviewed policy %s (existing protections preserved; no workflow is dispatched)\n", x.c.GitHubRepository, x.c.GitHubPolicy)
+	authorization := "existing repository/environment-scoped roles"
+	if x.c.GitHubPolicy != "" {
+		authorization = "reviewed policy " + x.c.GitHubPolicy
+	}
+	fmt.Fprintf(x.o.Output, "Configuring GitHub targets for %s using %s (existing protections preserved; no workflow is dispatched)\n", x.c.GitHubRepository, authorization)
 	setup := x.o.SetupGitHub
 	if setup == nil {
 		setup = githubsetup.Reconcile

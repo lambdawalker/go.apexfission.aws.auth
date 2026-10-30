@@ -249,8 +249,13 @@ func Run(ctx context.Context, o Options) (result error) {
 				return errors.New("GitHub setup requires explicit --yes for unattended changes")
 			}
 			x.c = c
-			if err := x.setupGitHub(); err != nil {
+			if err := x.prepareGitHubAuthorization(terminalInput); err != nil {
 				return err
+			}
+			if x.c.GitHubSetup {
+				if err := x.setupGitHub(); err != nil {
+					return err
+				}
 			}
 			c = x.c
 		}
