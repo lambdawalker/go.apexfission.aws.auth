@@ -52,3 +52,11 @@ func TestFailedPulumiProcessExposesOnlyRedactedDeploymentDiagnostics(t *testing.
 		t.Fatalf("config output exposed: %v", err)
 	}
 }
+
+func TestQuotedCredentialRedaction(t *testing.T) {
+	raw := []byte(`provider error: {"password":"quoted\"tail-secret","PROOF_KEY":"key\\with-backslash"}`)
+	got := pulumiFailureDetails(nil, []string{"up"}, raw)
+	if strings.Contains(got, "tail-secret") || strings.Contains(got, "with-backslash") {
+		t.Fatalf("escaped credential leaked: %s", got)
+	}
+}

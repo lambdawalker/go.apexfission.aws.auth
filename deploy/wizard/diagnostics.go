@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var diagnosticLabels = regexp.MustCompile(`(?i)(["']?(?:password|passphrase|token|secret|proof_?key|aws_secret_access_key|aws_session_token|authorization)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}\]]+)`)
+var diagnosticLabels = regexp.MustCompile(`(?i)(["']?(?:password|passphrase|token|secret|proof_?key|aws_secret_access_key|aws_session_token|authorization)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}\]]+)`)
 var diagnosticBearer = regexp.MustCompile(`(?i)\bBearer\s+[^\s"',;}]+`)
 var diagnosticAccessKey = regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`)
 var diagnosticANSI = regexp.MustCompile("\\x1b\\[[0-?]*[ -/]*[@-~]")
