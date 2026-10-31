@@ -1,0 +1,59 @@
+{
+    "manifest": {
+        "time": "2026-10-30T20:02:17.717572899-05:00",
+        "magic": "d540e88789f936dedbe50a295669c8332d4526ab86e83f1434c07707510d8880",
+        "version": "v3.273.0"
+    },
+    "config": {
+        "plan-format-fixture:hash": "changed"
+    },
+    "resourcePlans": {
+        "urn:pulumi:fixture::plan-format-fixture::plan-fixture:index:Record::record": {
+            "goal": {
+                "type": "plan-fixture:index:Record",
+                "name": "record",
+                "custom": false,
+                "inputDiff": {
+                    "updates": {
+                        "hash": "changed"
+                    }
+                },
+                "outputDiff": {},
+                "parent": "urn:pulumi:fixture::plan-format-fixture::pulumi:pulumi:Stack::plan-format-fixture-fixture",
+                "protect": false,
+                "propertyDependencies": {
+                    "hash": [],
+                    "policy": []
+                },
+                "customTimeouts": {}
+            },
+            "steps": [
+                "update"
+            ],
+            "state": null,
+            "seed": "TPD8rt0syx/cJArPUi6+mJBe/F6nYdD5ZU1S2nJ04x4="
+        },
+        "urn:pulumi:fixture::plan-format-fixture::pulumi:pulumi:Stack::plan-format-fixture-fixture": {
+            "goal": {
+                "type": "pulumi:pulumi:Stack",
+                "name": "plan-format-fixture-fixture",
+                "custom": false,
+                "inputDiff": {},
+                "outputDiff": {
+                    "updates": {
+                        "sourceHash": "changed"
+                    }
+                },
+                "protect": false,
+                "customTimeouts": {}
+            },
+            "steps": [
+                "same"
+            ],
+            "state": {
+                "sourceHash": "changed"
+            },
+            "seed": "8jMIJcLbyRR0ynK+KC2nRSj6UpX3EVd7BoBl8AlVxZw="
+        }
+    }
+}

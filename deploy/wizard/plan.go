@@ -1,11 +1,11 @@
 package wizard
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 )
 
 // planHasDestructiveOps reads Pulumi's versioned DeploymentPlanV1 operations,
@@ -17,13 +17,11 @@ func planHasDestructiveOps(path string) (bool, error) {
 		return false, e
 	}
 
+	type resourcePlan struct {
+		Steps []string `json:"steps"`
+	}
 	type plan struct {
-		Manifest struct {
-			Version string `json:"version"`
-		} `json:"manifest"`
-		Resources map[string]struct {
-			Steps []string `json:"steps"`
-		} `json:"resourcePlans"`
+		Resources map[string]*resourcePlan `json:"resourcePlans"`
 	}
 	var root map[string]json.RawMessage
 	if e = json.Unmarshal(b, &root); e != nil {
@@ -47,12 +45,20 @@ func planHasDestructiveOps(path string) (bool, error) {
 		if e = json.Unmarshal(b, &parsed); e != nil {
 			return false, e
 		}
-		if !strings.HasPrefix(parsed.Manifest.Version, "3.") {
-			return false, errors.New("unsupported unwrapped Pulumi plan format; refusing automatic approval")
+		// manifest.version is CLI build metadata, not a plan schema version.
+		// Identify the unwrapped V1 representation by its resource-plan object.
+		resources, ok := root["resourcePlans"]
+		resources = bytes.TrimSpace(resources)
+		if !ok || len(resources) == 0 || resources[0] != '{' {
+			return false, errors.New("unsupported unwrapped Pulumi plan structure; expected resourcePlans object; refusing automatic approval")
 		}
+
 	}
 	destructive := false
 	for _, r := range parsed.Resources {
+		if r == nil {
+			return false, errors.New("invalid null resource plan; refusing automatic approval")
+		}
 		for _, op := range r.Steps {
 			switch op {
 			case "same", "create", "update", "read", "refresh", "import":
