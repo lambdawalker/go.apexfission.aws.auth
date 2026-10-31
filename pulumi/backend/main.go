@@ -102,13 +102,13 @@ func Deploy(ctx *pulumi.Context) error {
 	trust := pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)
 	roles := map[string]*iam.Role{}
 	for _, name := range []string{"signup", "resend", "confirm"} {
-		role, err := iam.NewRole(ctx, name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+		role, err := guard.Role(ctx, name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
 		if err != nil {
 			return err
 		}
 		roles[name] = role
 	}
-	challengeRole, err := iam.NewRole(ctx, "challenge-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+	challengeRole, err := guard.Role(ctx, "challenge-role", &iam.RoleArgs{AssumeRolePolicy: trust})
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func Deploy(ctx *pulumi.Context) error {
 			return err
 		}
 	}
-	trigger, err := lambda.NewFunction(ctx, "cognito-grant-challenge", &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: challengeRole.Arn, Code: pulumi.NewFileArchive(challengeArchive), SourceCodeHash: guard.CodeHash(challengeArchive), Timeout: pulumi.Int(10), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"TABLE_NAME": table.Name}}})
+	trigger, err := guard.Function(ctx, "cognito-grant-challenge", &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: challengeRole.Arn, Code: pulumi.NewFileArchive(challengeArchive), SourceCodeHash: guard.CodeHash(challengeArchive), Timeout: pulumi.Int(10), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"TABLE_NAME": table.Name}}})
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func Deploy(ctx *pulumi.Context) error {
 		if err != nil {
 			return err
 		}
-		fn, err := lambda.NewFunction(ctx, "email-"+name, &lambda.FunctionArgs{
+		fn, err := guard.Function(ctx, "email-"+name, &lambda.FunctionArgs{
 			Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")},
 			Role: roles[name].Arn, Code: pulumi.NewFileArchive(archives[name]), SourceCodeHash: guard.CodeHash(archives[name]), Timeout: pulumi.Int(25), MemorySize: pulumi.Int(256),
 			Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{
@@ -212,7 +212,7 @@ func Deploy(ctx *pulumi.Context) error {
 	// Registration is authorized by Cognito with the caller's access token, not IAM.
 	// Keep each endpoint in a separate Lambda, as with email verification.
 	for _, spec := range []struct{ name, path string }{{"passkeyoptions", "passkeys/options"}, {"passkeycomplete", "passkeys/complete"}} {
-		role, e := iam.NewRole(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+		role, e := guard.Role(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
 		if e != nil {
 			return e
 		}
@@ -220,7 +220,7 @@ func Deploy(ctx *pulumi.Context) error {
 		if e != nil {
 			return e
 		}
-		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archives[spec.name]), SourceCodeHash: guard.CodeHash(archives[spec.name]), Timeout: pulumi.Int(20)})
+		fn, e := guard.Function(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archives[spec.name]), SourceCodeHash: guard.CodeHash(archives[spec.name]), Timeout: pulumi.Int(20)})
 		if e != nil {
 			return e
 		}
@@ -242,7 +242,7 @@ func Deploy(ctx *pulumi.Context) error {
 		return err
 	}
 	for _, spec := range []struct{ name, path string }{{"auth-email-start", "email/start"}, {"auth-email-complete", "email/complete"}, {"auth-passkey-start", "passkey/start"}, {"auth-passkey-complete", "passkey/complete"}, {"auth-refresh", "refresh"}, {"auth-status", "status"}, {"auth-password-start", "password/start"}, {"auth-password-complete", "password/complete"}, {"auth-password-set", "password/set"}} {
-		role, e := iam.NewRole(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+		role, e := guard.Role(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
 		if e != nil {
 			return e
 		}
@@ -270,7 +270,7 @@ func Deploy(ctx *pulumi.Context) error {
 			}
 			dependencies = append(dependencies, grant)
 		}
-		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(authArchives[spec.name]), SourceCodeHash: guard.CodeHash(authArchives[spec.name]), Timeout: pulumi.Int(20), Environment: &lambda.FunctionEnvironmentArgs{Variables: variables}}, pulumi.DependsOn(dependencies))
+		fn, e := guard.Function(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(authArchives[spec.name]), SourceCodeHash: guard.CodeHash(authArchives[spec.name]), Timeout: pulumi.Int(20), Environment: &lambda.FunctionEnvironmentArgs{Variables: variables}}, pulumi.DependsOn(dependencies))
 		if e != nil {
 			return e
 		}

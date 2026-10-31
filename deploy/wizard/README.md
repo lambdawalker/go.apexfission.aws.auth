@@ -136,32 +136,46 @@ embedders/tests to exercise the actual approval logic with controlled input/time
 
 ## GitHub setup and deployment efficiency
 
-`--operation setup-github --scope all --github-repository owner/repo --yes`
-configures selected GitHub environments without deploying. Supply
-`--github-policy /path/to/reviewed-policy.json` for new OIDC deployment roles,
-or compatible `--github-shared-role-arn` / `--github-backend-role-arn` references.
-Interactive deploy offers setup once; `--github-setup` enables it explicitly.
-If the selected targets have no saved policy/role inputs, the wizard asks for a
-reviewed policy file (`policy`), the missing per-target role ARNs (`roles`), or
-`skip` (the default) to defer GitHub setup and continue local deployment. Complete
-saved inputs are reused without another authorization question. EOF cancels;
-it never approves setup. Policy paths may contain spaces and surrounding quotes.
+The Attestra consumer enables automatic AWS authorization. Interactive deployment
+asks **Set up deployment from GitHub? [Y/n]**. The wizard generates separate
+admin/index and backend deployment policies and runtime boundaries, displays the
+complete JSON plus its scope limitations, and asks for explicit permission
+approval. No hand-written IAM file or existing role is needed. The permission
+approval does not use the deployment countdown. Saved digests reuse approval;
+permission changes require another review. Authenticate locally through AWS SSO
+and `gh auth login` first.
 
-To resume local deployment after a GitHub setup prerequisite error on Windows:
+To configure selected targets without deploying them:
+
+```powershell
+.\deploy.bat --operation setup-github --scope all --environment dev --prefix next
+```
+
+Unattended setup needs `--yes` and, for new/changed generated permissions, the exact
+`--github-approve-policy <review-SHA256>` printed with the generated policy files.
+Ordinary GitHub deployments use saved automatic runtime pins and never enroll
+roles. The consumer must opt in with `Options.GitHubPolicyProfile` set to
+`githubsetup.AttestraProfile`, and use the matching shipped Pulumi programs.
+
+Advanced `--github-policy` or `--github-shared-role-arn` /
+`--github-backend-role-arn` overrides retain manual authorization. Without a known
+profile, interactive manual setup asks for `policy`, `roles` or `skip`.
+To defer GitHub setup and deploy locally with saved settings/vault:
 
 ```powershell
 .\deploy.bat --operation deploy --github-setup=false
 ```
 
-This preserves saved answers and the encrypted vault. To configure GitHub later,
-use `--operation setup-github`, supplying `--github-policy` or the selected targets'
-`--github-shared-role-arn` / `--github-backend-role-arn` flags. Unattended setup still
-requires explicit inputs (or already-existing deterministic roles) and `--yes`.
-Authenticate `gh` first. The consumer must include `.github/workflows/deploy.yml`
-and `deploy-target.yml`; setup fingerprints both, verifies the exact repository
-and operator identity, preserves unrelated settings/protections, and uses the
-existing S3 identity lock. Incompatible branch restrictions or trust fail with
-manual recovery guidance. No Action is dispatched automatically.
+An existing stack adopting automatic mode needs a local SSO deployment before its
+first Action, because bounded runtime names may cause role/function replacements.
+Review the Pulumi plan. The reset function keeps its exact name; if enrollment
+asks for local adoption, its runtime boundary has been created and the command
+above applies the approved pins. Retry `--operation setup-github` afterward.
+
+Setup fingerprints both checked-out workflow files, preserves existing protections
+and unrelated settings, and uses the S3 identity lock. Incompatible branch
+restrictions, trust or immutable policy contents stop for manual review. No
+workflow is dispatched automatically.
 
 See [GitHub setup](../githubsetup/README.md) for managed settings, permissions,
 encrypted secret-delivery metadata, force/rotation flags and ownership boundaries.

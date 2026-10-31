@@ -24,6 +24,7 @@ import (
 const Marker = "DEPLOY_CONFIG_SHA256"
 
 type Target struct {
+	Generated                           *GeneratedPolicy
 	Environment, RoleARN, SecretVersion string
 	Variables                           map[string]string
 	Secrets                             map[string]string
@@ -94,13 +95,18 @@ func Fingerprint(repo string, t Target, workflow string) (string, error) {
 			vars[k] = v
 		}
 	}
+	generatedSHA := ""
+	if t.Generated != nil {
+		generatedSHA = t.Generated.Digest
+	}
 	manifest := struct {
+		GeneratedSHA256                                                 string
 		Version                                                         int
 		Repository, Environment, RoleARN, SecretVersion, WorkflowSHA256 string
 		Variables                                                       map[string]string
 		SecretNames                                                     []string
 		Branch                                                          string
-	}{1, repo, t.Environment, t.RoleARN, t.SecretVersion, digest([]byte(workflow)), vars, names, "main"}
+	}{generatedSHA, 1, repo, t.Environment, t.RoleARN, t.SecretVersion, digest([]byte(workflow)), vars, names, "main"}
 	b, e := json.Marshal(manifest)
 	return digest(b), e
 }

@@ -158,6 +158,7 @@ func (x *execution) completeApplied(p *publication) error {
 // resuming an applied deployment, while resource and prerequisite changes do.
 func recoveryConfig(c choices) choices {
 	return choices{
+		GitHubAutomatic: c.GitHubAutomatic, GitHubSharedPrefix: c.GitHubSharedPrefix, GitHubBackendPrefix: c.GitHubBackendPrefix, GitHubSharedBoundary: c.GitHubSharedBoundary, GitHubBackendBoundary: c.GitHubBackendBoundary,
 		Prefix: c.Prefix, Environment: c.Environment, Account: c.Account, Region: c.Region,
 		StateBackend: c.StateBackend, BaseDomain: c.BaseDomain,
 		SenderDomain: c.SenderDomain, SenderAddress: c.SenderAddress, AdminEmail: c.AdminEmail,

@@ -12,7 +12,7 @@ import (
 )
 
 func deployRuntime(ctx *pulumi.Context, cfg *config.Config, api *apigatewayv2.Api) error {
-	role, e := iam.NewRole(ctx, "app-config-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)})
+	role, e := guard.Role(ctx, "app-config-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)})
 	if e != nil {
 		return e
 	}
@@ -25,7 +25,7 @@ func deployRuntime(ctx *pulumi.Context, cfg *config.Config, api *apigatewayv2.Ap
 		return e
 	}
 	archive, _ := filepath.Abs("../dist/app-config.zip")
-	fn, e := lambda.NewFunction(ctx, "app-config", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Timeout: pulumi.Int(10), MemorySize: pulumi.Int(128), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RUNTIME_TABLE": pulumi.String(cfg.Require("runtimeTableName")), "ENVIRONMENT": pulumi.String(ctx.Stack())}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
+	fn, e := guard.Function(ctx, "app-config", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Timeout: pulumi.Int(10), MemorySize: pulumi.Int(128), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RUNTIME_TABLE": pulumi.String(cfg.Require("runtimeTableName")), "ENVIRONMENT": pulumi.String(ctx.Stack())}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
 	if e != nil {
 		return e
 	}
