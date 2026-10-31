@@ -244,7 +244,11 @@ func (s Store) SyncDefaults(ctx context.Context, c Config, f Fence) error {
 	} else {
 		c.Revision = 0
 	}
-	if !changed {
+	if changed {
+		// Wall-clock metadata belongs to the fenced publication, not to Pulumi's
+		// declarative output evaluated independently during preview and apply.
+		c.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	} else {
 		c.UpdatedAt = old.UpdatedAt
 	}
 	m, e := item("ENV#"+c.Environment, "CONFIG", storedConfig{Config: c, DefaultGeneration: f.Revision})

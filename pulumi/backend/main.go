@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/apigatewayv2"
@@ -303,7 +302,6 @@ func Deploy(ctx *pulumi.Context) error {
 	}
 	defaults := deploymentRuntimeDefaults(ctx.Stack(), cfg.Get("captureEnabled"))
 	// New defaults use generic localized disclosure; admin overrides remain revisioned.
-	defaults.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if e := defaults.Validate(); e != nil {
 		return e
 	}

@@ -130,12 +130,7 @@ func (x *execution) secrets(f *os.File, interactive bool) error {
 	}
 	return v.Save(values)
 }
-func destructivePreview(s string) bool {
-	s = strings.ToLower(s)
-	return strings.Contains(s, "delete") || strings.Contains(s, "replace") || strings.Contains(s, "destroy")
-}
-func (x *execution) confirmPreview(preview string) error {
-	destructive := destructivePreview(preview)
+func (x *execution) confirmPreview(preview string, destructive bool) error {
 	if x.o.ConfirmPreview != nil {
 		return x.o.ConfirmPreview(x.ctx, preview, destructive)
 	}
@@ -168,6 +163,7 @@ func (x *execution) confirmPreview(preview string) error {
 	defer r.Close()
 	if destructive {
 		fmt.Fprint(x.o.Output, "Destructive changes detected. Type apply-destructive to proceed: ")
+		defer fmt.Fprint(x.o.Output, "\r\n")
 		return x.readApproval(r, nil, true)
 	}
 	fmt.Fprintln(x.o.Output, "Preview complete. Applying in 5 seconds; Yes/Enter proceeds, No/Escape/Ctrl-C cancels.")

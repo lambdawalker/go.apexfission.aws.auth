@@ -77,6 +77,11 @@ func (process) RunInput(ctx context.Context, dir string, env []string, input io.
 		if strings.Contains(lower, "sso session associated") || strings.Contains(lower, "error loading sso token") || strings.Contains(lower, "token has expired") || strings.Contains(lower, "expiredtoken") {
 			return nil, fmt.Errorf("%s: %w", name, ErrSSOSessionExpired)
 		}
+		if name == "pulumi" {
+			if details := pulumiFailureDetails(env, args, b); details != "" {
+				return nil, fmt.Errorf("pulumi %s failed: %w\n%s", args[0], e, details)
+			}
+		}
 		return nil, fmt.Errorf("%s failed (output suppressed; verify session and CLI diagnostics separately): %w", name, e)
 	}
 	return b, nil
@@ -580,7 +585,11 @@ func (x *execution) stackRun(shared bool, sharedOut map[string]any) (map[string]
 		return nil, e
 	}
 	fmt.Fprint(x.o.Output, string(b))
-	if e = x.confirmPreview(string(b)); e != nil {
+	destructive, err := planHasDestructiveOps(planPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot review saved deployment plan: %w", err)
+	}
+	if e = x.confirmPreview(string(b), destructive); e != nil {
 		return nil, e
 	}
 	b, e = x.run("pulumi", "up", "--stack", x.stack, "--non-interactive", "--yes", "--plan", planPath)

@@ -68,6 +68,13 @@ type fakeRunner struct {
 func (r *fakeRunner) Run(_ context.Context, dir string, env []string, name string, args ...string) ([]byte, error) {
 	call := name + " " + strings.Join(args, " ")
 	r.calls = append(r.calls, call)
+	if name == "pulumi" && len(args) > 0 && args[0] == "preview" {
+		if path := argument(args, "--save-plan"); path != "" {
+			if e := os.WriteFile(path, []byte(`{"version":1,"plan":{"resourcePlans":{"urn:test":{"steps":["update"]}}}}`), 0600); e != nil {
+				return nil, e
+			}
+		}
+	}
 	switch {
 	case strings.Contains(call, "get-caller-identity"):
 		return []byte(`{"Account":"123456789012"}`), nil
