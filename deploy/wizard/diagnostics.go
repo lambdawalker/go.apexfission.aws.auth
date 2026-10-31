@@ -23,6 +23,20 @@ func pulumiFailureDetails(env, args []string, b []byte) string {
 			return ""
 		}
 	}
+	return redactedFailureDetails(env, b)
+}
+
+// AWS diagnostics must be stderr only: stdout can contain credential exports.
+func awsFailureDetails(env, args []string, stderr []byte) string {
+	for _, arg := range args {
+		if arg == "--debug" {
+			return ""
+		}
+	}
+	return redactedFailureDetails(env, stderr)
+}
+
+func redactedFailureDetails(env []string, b []byte) string {
 	secrets := []string{}
 	for _, entry := range env {
 		key, value, ok := strings.Cut(entry, "=")
@@ -54,7 +68,7 @@ func pulumiFailureDetails(env, args []string, b []byte) string {
 	text = diagnosticANSI.ReplaceAllString(text, "")
 	const max = 32 * 1024
 	if len(text) > max {
-		text = "[earlier Pulumi output omitted]\n" + text[len(text)-max:]
+		text = "[earlier diagnostic output omitted]\n" + text[len(text)-max:]
 	}
 	return strings.TrimSpace(text)
 }

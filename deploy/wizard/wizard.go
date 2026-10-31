@@ -71,11 +71,29 @@ func (process) RunInput(ctx context.Context, dir string, env []string, input io.
 	c.Dir = dir
 	c.Env = env
 	c.Stdin = input
-	b, e := c.CombinedOutput()
+
+	var b, diagnostic []byte
+	var e error
+	if name == "aws" {
+		var stdout, stderr bytes.Buffer
+		c.Stdout, c.Stderr = &stdout, &stderr
+		e = c.Run()
+		b, diagnostic = stdout.Bytes(), stderr.Bytes()
+	} else {
+		b, e = c.CombinedOutput()
+		diagnostic = b
+	}
 	if e != nil {
-		lower := strings.ToLower(string(b))
-		if strings.Contains(lower, "sso session associated") || strings.Contains(lower, "error loading sso token") || strings.Contains(lower, "token has expired") || strings.Contains(lower, "expiredtoken") {
-			return nil, fmt.Errorf("%s: %w", name, ErrSSOSessionExpired)
+		if name == "aws" {
+			operation := strings.Join(args[:min(2, len(args))], " ")
+			details := awsFailureDetails(env, args, diagnostic)
+			if ssoCredentialsExpired(string(diagnostic)) {
+				return nil, fmt.Errorf("aws %s failed: %w: %w\n%s", operation, e, ErrSSOSessionExpired, details)
+			}
+			if details != "" {
+				return nil, fmt.Errorf("aws %s failed: %w\n%s", operation, e, details)
+			}
+			return nil, fmt.Errorf("aws %s failed (no shareable stderr diagnostics; stdout withheld): %w", operation, e)
 		}
 		if name == "pulumi" {
 			if details := pulumiFailureDetails(env, args, b); details != "" {
@@ -218,6 +236,7 @@ func Run(ctx context.Context, o Options) (result error) {
 			env = clean
 		}
 		env = withEnv(env, "AWS_PROFILE", c.Profile)
+		env = withEnv(env, "AWS_DEFAULT_PROFILE", c.Profile)
 	}
 	x := execution{ctx: ctx, o: o, c: c, env: env, dir: root, cloudflareToken: os.Getenv("CLOUDFLARE_API_TOKEN"), approved: yes}
 	defer func() { clear(x.secretMetadataKey) }()
@@ -743,7 +762,10 @@ func (process) RunInteractive(ctx context.Context, dir string, env []string, inp
 	return nil
 }
 func (x *execution) renewSSO(interactive bool) error {
-	if x.c.Profile == "" || !interactive || os.Getenv("CI") != "" {
+	if !interactive || os.Getenv("CI") != "" {
+		return nil
+	}
+	if x.c.Profile == "" && (envValue(x.env, "AWS_ACCESS_KEY_ID") != "" || envValue(x.env, "AWS_WEB_IDENTITY_TOKEN_FILE") != "" || envValue(x.env, "AWS_ROLE_ARN") != "") {
 		return nil
 	}
 	initial := x.aws(nil, "sts", "get-caller-identity")
@@ -753,8 +775,12 @@ func (x *execution) renewSSO(interactive bool) error {
 	if !errors.Is(initial, ErrSSOSessionExpired) {
 		return initial
 	}
-	session, se := x.run("aws", "configure", "get", "sso_session", "--profile", x.c.Profile)
-	start, ue := x.run("aws", "configure", "get", "sso_start_url", "--profile", x.c.Profile)
+	profileArgs := []string{}
+	if x.c.Profile != "" {
+		profileArgs = []string{"--profile", x.c.Profile}
+	}
+	session, se := x.run("aws", append([]string{"configure", "get", "sso_session"}, profileArgs...)...)
+	start, ue := x.run("aws", append([]string{"configure", "get", "sso_start_url"}, profileArgs...)...)
 	if (se != nil || strings.TrimSpace(string(session)) == "") && (ue != nil || strings.TrimSpace(string(start)) == "") {
 		return initial
 	}
@@ -762,7 +788,9 @@ func (x *execution) renewSSO(interactive bool) error {
 	if !ok {
 		return errors.New("SSO renewal requires an InteractiveRunner to display authorization instructions")
 	}
-	if e := runner.RunInteractive(x.ctx, x.dir, x.env, x.o.Input, x.o.Output, "aws", "sso", "login", "--profile", x.c.Profile, "--no-browser", "--use-device-code"); e != nil {
+	login := append([]string{"sso", "login"}, profileArgs...)
+	login = append(login, "--no-browser", "--use-device-code")
+	if e := runner.RunInteractive(x.ctx, x.dir, x.env, x.o.Input, x.o.Output, "aws", login...); e != nil {
 		return e
 	}
 	var caller struct{ Account string }
