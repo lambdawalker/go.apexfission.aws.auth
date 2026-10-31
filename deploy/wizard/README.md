@@ -199,8 +199,10 @@ Deploy approval uses resource operation steps from the saved Pulumi plan, not
 words in policy/property values. Ordinary updates mentioning DeleteFunctionConcurrency,
 replace, or destroy do not require destructive approval. Actual deletions,
 replacements and ownership removals still require the explicit phrase, including
-with --yes. Versioned V1 and documented Pulumi 3.x unwrapped plans are supported;
-unknown formats or operation types stop before apply. The exact saved plan is
+with --yes. Versioned V1 and structurally compatible unwrapped plans are supported;
+unknown formats or operation types stop before apply. The unwrapped format is
+identified by its resourcePlans object, independently of manifest.version CLI
+build labels such as v3.273.0, release versions, or development labels. The exact saved plan is
 still passed to `pulumi up --plan`.
 
 Pulumi preview/up errors include redacted CLI diagnostics instead of only an exit

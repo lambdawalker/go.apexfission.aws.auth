@@ -1,0 +1,37 @@
+{
+    "manifest": {
+        "time": "2026-10-30T20:02:22.204162492-05:00",
+        "magic": "d540e88789f936dedbe50a295669c8332d4526ab86e83f1434c07707510d8880",
+        "version": "v3.273.0"
+    },
+    "config": {
+        "plan-format-fixture:hash": "changed",
+        "plan-format-fixture:keep": "false"
+    },
+    "resourcePlans": {
+        "urn:pulumi:fixture::plan-format-fixture::plan-fixture:index:Record::record": {
+            "steps": [
+                "delete"
+            ],
+            "state": null
+        },
+        "urn:pulumi:fixture::plan-format-fixture::pulumi:pulumi:Stack::plan-format-fixture-fixture": {
+            "goal": {
+                "type": "pulumi:pulumi:Stack",
+                "name": "plan-format-fixture-fixture",
+                "custom": false,
+                "inputDiff": {},
+                "outputDiff": {},
+                "protect": false,
+                "customTimeouts": {}
+            },
+            "steps": [
+                "same"
+            ],
+            "state": {
+                "sourceHash": "changed"
+            },
+            "seed": "bRIZTjIJgNLTiXdoOzyfpDAd9e7IFRN9fNW1ZKnJgE0="
+        }
+    }
+}
