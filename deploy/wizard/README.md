@@ -219,3 +219,24 @@ After a failure, rerun the wizard to refresh state and create a fresh reviewed
 plan. A planned apply can fail after some operations have completed, so preserve
 state and inspect the refreshed preview. Temporary plan paths are removed when
 the invocation ends; do not reuse the printed temporary path or bypass the plan.
+
+## AWS startup errors and SSO sessions
+
+Failed AWS CLI calls name their service/operation and include redacted stderr.
+AWS stdout is never copied into errors because it may contain credential exports
+or object contents. Debug-mode output remains suppressed. An exit code such as
+255 alone is not interpreted as an expired login.
+
+Interactive SSO renewal works with an explicit wizard profile or the CLI's own
+ambient/default profile selection. It requires a recognized credential-expiry
+error and confirmed SSO configuration, then verifies the account again after
+login. CI, noninteractive callers, ambient static credentials and web-identity
+sessions do not trigger interactive login. A named --profile selection pins both
+AWS_PROFILE and AWS_DEFAULT_PROFILE and removes ambient static credentials.
+AccessDenied, missing profiles, network errors and generic missing credentials
+retain their diagnostics rather than triggering a speculative login.
+
+To inspect the current credential selection independently, run
+`aws sts get-caller-identity --region <region>` with the same `--profile <name>`
+if configured in the wizard. If it succeeds but the wizard fails on an S3 or KMS
+check, use the named failing operation to investigate permissions/session scope.

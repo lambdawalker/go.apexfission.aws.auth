@@ -129,3 +129,31 @@ func TestInteractiveProcessStreamsWhileRunning(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestSSORenewalUsesDefaultCredentialChain(t *testing.T) {
+	t.Setenv("CI", "")
+	r := &ssoRunner{}
+	x := execution{ctx: context.Background(), c: choices{Account: "123456789012"}, env: []string{"AWS_PROFILE=default-sso"}, o: Options{Runner: r, Output: io.Discard}}
+	if err := x.renewSSO(true); err != nil {
+		t.Fatal(err)
+	}
+	if r.interactive != 1 || !r.renewed {
+		t.Fatal("default-chain SSO was not renewed")
+	}
+	for _, call := range r.calls {
+		if strings.Contains(call, "--profile") {
+			t.Fatal("default AWS selection was overridden", call)
+		}
+	}
+}
+func TestSSORenewalDoesNotReplaceAmbientStaticCredentials(t *testing.T) {
+	t.Setenv("CI", "")
+	r := &ssoRunner{}
+	x := execution{ctx: context.Background(), c: choices{Account: "123456789012"}, env: []string{"AWS_ACCESS_KEY_ID=temporary-key", "AWS_SESSION_TOKEN=expired"}, o: Options{Runner: r, Output: io.Discard}}
+	if err := x.renewSSO(true); err != nil {
+		t.Fatal(err)
+	}
+	if r.interactive != 0 || len(r.calls) != 0 {
+		t.Fatal("ambient credential selection changed")
+	}
+}

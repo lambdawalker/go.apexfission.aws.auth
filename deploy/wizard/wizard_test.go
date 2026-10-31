@@ -194,6 +194,7 @@ func TestOverridesRemainPrefixBoundAndDistinct(t *testing.T) {
 }
 func TestExplicitProfileDropsAmbientCredentials(t *testing.T) {
 	t.Setenv("AWS_ACCESS_KEY_ID", "ambient-access")
+	t.Setenv("AWS_DEFAULT_PROFILE", "unrelated-legacy-profile")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "ambient-secret")
 	t.Setenv("AWS_SESSION_TOKEN", "ambient-session")
 	o, r := fixture(t)
@@ -202,6 +203,9 @@ func TestExplicitProfileDropsAmbientCredentials(t *testing.T) {
 	o.Runner = capture
 	if e := Run(context.Background(), o); e != nil {
 		t.Fatal(e)
+	}
+	if envValue(capture.env, "AWS_PROFILE") != "chosen" || envValue(capture.env, "AWS_DEFAULT_PROFILE") != "chosen" {
+		t.Fatal("explicit profile did not pin both AWS clients")
 	}
 	for _, v := range capture.env {
 		if strings.Contains(v, "ambient-") {
