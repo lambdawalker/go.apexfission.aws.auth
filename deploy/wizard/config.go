@@ -19,6 +19,10 @@ import (
 )
 
 type choices struct {
+	GitHubAutomatic                                                                                bool
+	GitHubSharedApproval, GitHubBackendApproval                                                    string
+	GitHubSharedPrefix, GitHubBackendPrefix, GitHubSharedBoundary, GitHubBackendBoundary           string
+	GitHubApprovalToken                                                                            string `json:"-"`
 	GitHubSetup, GitHubAsked                                                                       bool
 	GitHubRepository, GitHubPolicy, GitHubSharedRoleARN, GitHubBackendRoleARN, GitHubSecretVersion string
 	GitHubForce, GitHubRotate                                                                      bool
@@ -360,6 +364,7 @@ func parse(o Options) (saved, choices, bool, error) {
 		}
 		f.StringVar(v.p, v.name, *v.p, v.name)
 	}
+	f.StringVar(&c.GitHubApprovalToken, "github-approve-policy", "", "exact generated policy review SHA256 for unattended enrollment")
 	f.StringVar(&c.GitHubRepository, "github-repository", c.GitHubRepository, "GitHub owner/repository")
 	f.StringVar(&c.GitHubPolicy, "github-policy", c.GitHubPolicy, "reviewed deployment role IAM policy JSON")
 	f.StringVar(&c.GitHubSharedRoleARN, "github-shared-role-arn", c.GitHubSharedRoleARN, "existing exact-scoped shared deployment role")
@@ -582,7 +587,7 @@ func commonScopeAnswers(c choices) map[string]json.RawMessage {
 	var all map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &all)
 	out := map[string]json.RawMessage{}
-	for _, key := range []string{"Account", "Region", "StateBackend", "BaseDomain", "Profile", "Route53ZoneID", "CloudflareZoneID", "IndexDomain", "AdminDomain", "IndexCertificateARN", "AdminCertificateARN"} {
+	for _, key := range []string{"Account", "Region", "StateBackend", "BaseDomain", "Profile", "Route53ZoneID", "CloudflareZoneID", "IndexDomain", "AdminDomain", "IndexCertificateARN", "AdminCertificateARN", "GitHubRepository", "GitHubAutomatic", "GitHubSharedApproval", "GitHubBackendApproval", "GitHubSharedPrefix", "GitHubBackendPrefix", "GitHubSharedBoundary", "GitHubBackendBoundary", "GitHubSetup", "GitHubAsked", "GitHubPolicy", "GitHubSharedRoleARN", "GitHubBackendRoleARN", "GitHubSecretVersion"} {
 		out[key] = all[key]
 	}
 	return out

@@ -44,7 +44,9 @@ func (x *execution) verifyState() error {
 	}
 	var encryption struct {
 		ServerSideEncryptionConfiguration struct {
-			Rules []struct{ ApplyServerSideEncryptionByDefault struct{ SSEAlgorithm string } }
+			Rules []struct {
+				ApplyServerSideEncryptionByDefault struct{ SSEAlgorithm, KMSMasterKeyID string }
+			}
 		}
 	}
 	if e := x.aws(&encryption, "s3api", "get-bucket-encryption", "--bucket", bucket, "--expected-bucket-owner", x.c.Account); e != nil {
@@ -55,6 +57,20 @@ func (x *execution) verifyState() error {
 		algorithm := rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm
 		if algorithm == "AES256" || algorithm == "aws:kms" || algorithm == "aws:kms:dsse" {
 			encrypted = true
+		}
+		if (algorithm == "aws:kms" || algorithm == "aws:kms:dsse") && x.o.GitHubPolicyProfile == "attestra-v1" {
+			key := rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID
+			if key == "" {
+				key = "alias/aws/s3"
+			}
+			var result struct{ KeyMetadata struct{ Arn string } }
+			if e := x.aws(&result, "kms", "describe-key", "--key-id", key); e != nil {
+				return fmt.Errorf("resolve state encryption key for automatic deployment policy: %w", e)
+			}
+			if result.KeyMetadata.Arn == "" {
+				return errors.New("state KMS key ARN unavailable")
+			}
+			x.stateKMSKeys = append(x.stateKMSKeys, result.KeyMetadata.Arn)
 		}
 	}
 	if !encrypted {

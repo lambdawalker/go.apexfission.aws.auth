@@ -34,6 +34,8 @@ import (
 // are optional seams; production uses the local AWS/Pulumi CLI and ARM64 builder.
 // A custom Runner must also implement StdinRunner to set a new encrypted proofKey.
 type Options struct {
+	// GitHubPolicyProfile enables a known generated IAM profile; empty keeps manual setup.
+	GitHubPolicyProfile         string
 	SetupGitHub                 func(context.Context, githubsetup.Options) error
 	Root                        string
 	Input                       io.Reader
@@ -81,6 +83,8 @@ func (process) RunInput(ctx context.Context, dir string, env []string, input io.
 }
 
 type execution struct {
+	generated           map[string]*githubsetup.GeneratedPolicy
+	stateKMSKeys        []string
 	secretMetadataKey   []byte
 	ctx                 context.Context
 	o                   Options
@@ -236,12 +240,12 @@ func Run(ctx context.Context, o Options) (result error) {
 			c.GitHubSetup = true
 		}
 		if terminalInput && len(o.Args) == 0 && !c.GitHubAsked {
-			fmt.Fprint(o.Output, "Configure GitHub environments and deployment Actions for these targets? [y/N]: ")
+			fmt.Fprint(o.Output, "Set up deployment from GitHub? [Y/n]: ")
 			line, err := o.reader.ReadString('\n')
 			if err != nil {
 				return errors.New("GitHub setup selection cancelled")
 			}
-			c.GitHubSetup = strings.EqualFold(strings.TrimSpace(line), "y") || strings.EqualFold(strings.TrimSpace(line), "yes")
+			c.GitHubSetup = strings.TrimSpace(line) == "" || strings.EqualFold(strings.TrimSpace(line), "y") || strings.EqualFold(strings.TrimSpace(line), "yes")
 			c.GitHubAsked = true
 		}
 		if c.GitHubSetup {
@@ -253,7 +257,7 @@ func Run(ctx context.Context, o Options) (result error) {
 				return err
 			}
 			if x.c.GitHubSetup {
-				if err := x.setupGitHub(); err != nil {
+				if err := x.setupGitHub(terminalInput); err != nil {
 					return err
 				}
 			}
@@ -612,6 +616,16 @@ func (x *execution) stackRun(shared bool, sharedOut map[string]any) (map[string]
 func (x *execution) desiredConfig(shared bool, out map[string]any) (map[string]string, error) {
 	index, admin, api, origin := x.c.domains()
 	values := map[string]string{"deploymentPrefix": x.c.Prefix, "expectedAccountId": x.c.Account, "expectedRegion": x.c.Region}
+	if x.c.GitHubAutomatic {
+		prefix, boundary := x.c.GitHubBackendPrefix, x.c.GitHubBackendBoundary
+		if shared {
+			prefix, boundary = x.c.GitHubSharedPrefix, x.c.GitHubSharedBoundary
+		}
+		if prefix == "" || boundary == "" {
+			return nil, errors.New("automatic runtime permissions are not approved for this target; run --operation setup-github first")
+		}
+		values["deploymentRolePrefix"], values["deploymentBoundaryArn"] = prefix, boundary
+	}
 	if shared {
 		values["domain"] = index
 		values["adminDomain"] = admin

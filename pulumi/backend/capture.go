@@ -90,7 +90,7 @@ func deployCapture(ctx *pulumi.Context, cfg *config.Config, api *apigatewayv2.Ap
 	}
 	functions := map[string]*lambda.Function{}
 	for _, name := range []string{"capture", "capture-worker", "capture-dispatcher"} {
-		role, e := iam.NewRole(ctx, name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+		role, e := guard.Role(ctx, name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
 		if e != nil {
 			return e
 		}
@@ -113,7 +113,7 @@ func deployCapture(ctx *pulumi.Context, cfg *config.Config, api *apigatewayv2.Ap
 		if name != "capture" {
 			timeout, memory = 90, 1024
 		}
-		fn, e := lambda.NewFunction(ctx, name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Timeout: pulumi.Int(timeout), MemorySize: pulumi.Int(memory), ReservedConcurrentExecutions: pulumi.Int(reserved), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_TABLE": reset.Control.Name, "RUNTIME_TABLE": pulumi.String(cfg.Require("runtimeTableName")), "ENVIRONMENT": pulumi.String(ctx.Stack()), "CAPTURE_TABLE": table.Name, "CAPTURE_BUCKET": bucket.ID(), "CAPTURE_QUEUE_URL": queue.Url, "CAPTURE_ENABLED": pulumi.String(fmt.Sprint(enabled)), "CAPTURE_DOCUMENT_TYPE": pulumi.String(kind), "CAPTURE_PURPOSE": pulumi.String(cfg.Get("capturePurpose")), "CAPTURE_JURISDICTION": pulumi.String(cfg.Get("captureJurisdiction"))}}}, pulumi.DependsOn([]pulumi.Resource{grant, versioning}))
+		fn, e := guard.Function(ctx, name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Timeout: pulumi.Int(timeout), MemorySize: pulumi.Int(memory), ReservedConcurrentExecutions: pulumi.Int(reserved), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_TABLE": reset.Control.Name, "RUNTIME_TABLE": pulumi.String(cfg.Require("runtimeTableName")), "ENVIRONMENT": pulumi.String(ctx.Stack()), "CAPTURE_TABLE": table.Name, "CAPTURE_BUCKET": bucket.ID(), "CAPTURE_QUEUE_URL": queue.Url, "CAPTURE_ENABLED": pulumi.String(fmt.Sprint(enabled)), "CAPTURE_DOCUMENT_TYPE": pulumi.String(kind), "CAPTURE_PURPOSE": pulumi.String(cfg.Get("capturePurpose")), "CAPTURE_JURISDICTION": pulumi.String(cfg.Get("captureJurisdiction"))}}}, pulumi.DependsOn([]pulumi.Resource{grant, versioning}))
 		if e != nil {
 			return e
 		}

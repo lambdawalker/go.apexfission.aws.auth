@@ -50,7 +50,7 @@ func Deploy(ctx *pulumi.Context) error {
 	if e != nil {
 		return e
 	}
-	role, e := iam.NewRole(ctx, "index-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)})
+	role, e := guard.Role(ctx, "index-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)})
 	if e != nil {
 		return e
 	}
@@ -63,7 +63,7 @@ func Deploy(ctx *pulumi.Context) error {
 		return e
 	}
 	archive, _ := filepath.Abs("../dist/index.zip")
-	fn, e := lambda.NewFunction(ctx, "index-handler", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), MemorySize: pulumi.Int(256), Timeout: pulumi.Int(20), ReservedConcurrentExecutions: pulumi.Int(-1), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"REGISTRY_TABLE": table.Name, "RUNTIME_TABLE": runtimeTable.Name}}}, pulumi.DependsOn([]pulumi.Resource{logs, grant}))
+	fn, e := guard.Function(ctx, "index-handler", &lambda.FunctionArgs{Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), MemorySize: pulumi.Int(256), Timeout: pulumi.Int(20), ReservedConcurrentExecutions: pulumi.Int(-1), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"REGISTRY_TABLE": table.Name, "RUNTIME_TABLE": runtimeTable.Name}}}, pulumi.DependsOn([]pulumi.Resource{logs, grant}))
 	if e != nil {
 		return e
 	}

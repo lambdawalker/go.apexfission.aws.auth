@@ -23,6 +23,10 @@ func envValue(env []string, key string) string {
 // prepareGitHubAuthorization collects first-time OIDC setup inputs. Unattended
 // callers retain deterministic role discovery and fail closed in reconciliation.
 func (x *execution) prepareGitHubAuthorization(interactive bool) error {
+	if x.o.GitHubPolicyProfile == githubsetup.AttestraProfile && x.c.GitHubPolicy == "" && x.c.GitHubSharedRoleARN == "" && x.c.GitHubBackendRoleARN == "" {
+		x.c.GitHubAutomatic = true
+		return nil
+	}
 	needShared := x.c.Scope != "backend" && x.c.GitHubSharedRoleARN == ""
 	needBackend := x.c.Scope != "shared" && x.c.GitHubBackendRoleARN == ""
 	if !interactive || x.c.GitHubPolicy != "" || (!needShared && !needBackend) {
@@ -96,7 +100,7 @@ func (x *execution) prepareGitHubAuthorization(interactive bool) error {
 	}
 }
 
-func (x *execution) setupGitHub() error {
+func (x *execution) setupGitHub(interactive bool) error {
 	if x.c.GitHubRepository == "" {
 		b, e := x.run("gh", "repo", "view", "--json", "nameWithOwner")
 		if e != nil {
@@ -107,6 +111,11 @@ func (x *execution) setupGitHub() error {
 			return errors.New("cannot resolve target GitHub repository")
 		}
 		x.c.GitHubRepository = repo.NameWithOwner
+	}
+	if x.usesAutomaticGitHub() {
+		if err := x.prepareAutomaticGitHub(interactive); err != nil {
+			return err
+		}
 	}
 	passphrase := envValue(x.env, "PULUMI_CONFIG_PASSPHRASE")
 	if passphrase == "" {
@@ -144,6 +153,14 @@ func (x *execution) setupGitHub() error {
 		if shared {
 			c.Scope = "shared"
 			role = c.GitHubSharedRoleARN
+			// Shared settings do not change when selecting another backend.
+			c.Environment = "dev"
+			c.SenderDomain, c.SenderAddress, c.AdminEmail = "", "", ""
+			c.APIDomain, c.AppOrigin, c.APICertificateARN, c.AppCertificateARN = "", "", "", ""
+			c.AndroidAssociations = ""
+			c.EnvironmentClass = ""
+			c.CaptureReserved, c.CaptureWorker, c.CaptureEnabled = defaults().CaptureReserved, defaults().CaptureWorker, false
+			c.GitHubBackendApproval, c.GitHubBackendPrefix, c.GitHubBackendBoundary, c.GitHubBackendRoleARN = "", "", "", ""
 		}
 		snapshot := saved{Version: 1, Choices: c, Bindings: map[string]binding{c.identity(): {Account: c.Account, Region: c.Region, StateBackend: c.StateBackend}}}
 		b, e := json.Marshal(snapshot)
@@ -158,7 +175,7 @@ func (x *execution) setupGitHub() error {
 			}
 			secrets["CLOUDFLARE_API_TOKEN"] = x.cloudflareToken
 		}
-		targets = append(targets, githubsetup.Target{Environment: c.stack(shared), RoleARN: role, SecretVersion: c.GitHubSecretVersion, Variables: variables, Secrets: secrets})
+		targets = append(targets, githubsetup.Target{Generated: x.generated[c.stack(shared)], Environment: c.stack(shared), RoleARN: role, SecretVersion: c.GitHubSecretVersion, Variables: variables, Secrets: secrets})
 	}
 	// Preserve reviewed nonsecret answers even if remote setup is interrupted.
 	path := filepath.Join(x.o.Root, ".attestra", "wizard.json")
@@ -178,6 +195,9 @@ func (x *execution) setupGitHub() error {
 		return err
 	}
 	authorization := "existing repository/environment-scoped roles"
+	if len(x.generated) > 0 {
+		authorization = "approved generated deployment policies and runtime boundaries"
+	}
 	if x.c.GitHubPolicy != "" {
 		authorization = "reviewed policy " + x.c.GitHubPolicy
 	}
@@ -187,4 +207,8 @@ func (x *execution) setupGitHub() error {
 		setup = githubsetup.Reconcile
 	}
 	return setup(x.ctx, githubsetup.Options{Root: x.o.Root, Repository: x.c.GitHubRepository, Account: x.c.Account, Region: x.c.Region, PolicyFile: x.c.GitHubPolicy, Workflow: ".github/workflows/deploy.yml", WorkflowFiles: []string{".github/workflows/deploy-target.yml"}, Targets: targets, SecretStateKey: x.secretMetadataKey, Runner: x.o.Runner, Env: x.env, Output: x.o.Output, Force: x.c.GitHubForce, RotateSecrets: x.c.GitHubRotate, Lock: x.acquireLock})
+}
+
+func (x *execution) usesAutomaticGitHub() bool {
+	return x.c.GitHubAutomatic && x.c.GitHubPolicy == "" && x.c.GitHubSharedRoleARN == "" && x.c.GitHubBackendRoleARN == ""
 }

@@ -41,7 +41,7 @@ func deployReset(ctx *pulumi.Context, cfg *config.Config, i *resetInventory) err
 	if cfg.Get("environmentResetEnabled") != "" {
 		enabled = cfg.GetBool("environmentResetEnabled")
 	}
-	role, e := iam.NewRole(ctx, "environment-reset-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)})
+	role, e := guard.Role(ctx, "environment-reset-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)})
 	if e != nil {
 		return e
 	}
@@ -72,7 +72,7 @@ func deployReset(ctx *pulumi.Context, cfg *config.Config, i *resetInventory) err
 		return string(b), e
 	}).(pulumi.StringOutput)
 	archive, _ := filepath.Abs("../dist/environment-reset.zip")
-	fn, e := lambda.NewFunction(ctx, "environment-reset", &lambda.FunctionArgs{Name: pulumi.String(ctx.Project() + "-reset-" + ctx.Stack()), Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Timeout: pulumi.Int(60), MemorySize: pulumi.Int(256), Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_MANIFEST": manifest, "RESET_TABLE": i.Control.Name, "ENVIRONMENT": pulumi.String(ctx.Stack()), "RESET_ENABLED": pulumi.String(fmt.Sprint(enabled))}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
+	fn, e := guard.Function(ctx, "environment-reset", &lambda.FunctionArgs{Name: pulumi.String(ctx.Project() + "-reset-" + ctx.Stack()), Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Timeout: pulumi.Int(60), MemorySize: pulumi.Int(256), Code: pulumi.NewFileArchive(archive), SourceCodeHash: guard.CodeHash(archive), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_MANIFEST": manifest, "RESET_TABLE": i.Control.Name, "ENVIRONMENT": pulumi.String(ctx.Stack()), "RESET_ENABLED": pulumi.String(fmt.Sprint(enabled))}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
 	if e != nil {
 		return e
 	}

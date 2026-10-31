@@ -45,6 +45,9 @@ func (c client) ensureRole(t Target) (string, error) {
 	}
 	provider := "arn:aws:iam::" + c.o.Account + ":oidc-provider/token.actions.githubusercontent.com"
 	name := "attestra-deploy-" + t.Environment
+	if t.Generated != nil {
+		name = "attestra-auto-" + t.Environment
+	}
 	if t.RoleARN != "" {
 		prefix := "arn:aws:iam::" + c.o.Account + ":role/"
 		if !strings.HasPrefix(t.RoleARN, prefix) {
@@ -75,6 +78,11 @@ func (c client) ensureRole(t Target) (string, error) {
 		if e := c.verifyProvider(provider); e != nil {
 			return "", e
 		}
+		if t.Generated != nil {
+			if e := c.applyGenerated(name, *t.Generated); e != nil {
+				return "", e
+			}
+		}
 		if c.o.PolicyFile != "" {
 			if e := c.applyPolicy(name); e != nil {
 				return "", e
@@ -83,11 +91,13 @@ func (c client) ensureRole(t Target) (string, error) {
 		fmt.Fprintf(c.o.Output, "Reusing repository/environment-scoped OIDC role %s; existing permissions are preserved\n", role.Arn)
 		return role.Arn, nil
 	}
-	if c.o.PolicyFile == "" {
+	if c.o.PolicyFile == "" && t.Generated == nil {
 		return "", errors.New("deployment role missing: provide --github-policy with a reviewed least-privilege IAM policy JSON, or --github-shared-role-arn / --github-backend-role-arn for existing exact-scoped roles (or use --github-setup=false to deploy locally and configure GitHub later); no AdministratorAccess is generated")
 	}
-	if _, e := readPolicy(c.o.PolicyFile); e != nil {
-		return "", e
+	if c.o.PolicyFile != "" {
+		if _, e := readPolicy(c.o.PolicyFile); e != nil {
+			return "", e
+		}
 	}
 	var providers struct {
 		Providers []struct{ Arn string } `json:"OpenIDConnectProviderList"`
@@ -116,7 +126,11 @@ func (c client) ensureRole(t Target) (string, error) {
 	if response.Role.Arn != "arn:aws:iam::"+c.o.Account+":role/"+name {
 		return "", errors.New("created deployment role ARN mismatch")
 	}
-	if e := c.applyPolicy(name); e != nil {
+	if t.Generated != nil {
+		if e := c.applyGenerated(name, *t.Generated); e != nil {
+			return "", e
+		}
+	} else if e := c.applyPolicy(name); e != nil {
 		return "", e
 	}
 	return response.Role.Arn, nil
