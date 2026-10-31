@@ -53,10 +53,10 @@ func TestBuildOperationAvoidsCloudAndPassesSelectedTargets(t *testing.T) {
 }
 func TestDestructivePreviewCannotUseUnattendedYes(t *testing.T) {
 	x := execution{ctx: context.Background(), approved: true, o: Options{Input: strings.NewReader(""), Output: io.Discard}}
-	if x.confirmPreview("1 delete") == nil {
+	if x.confirmPreview("1 delete", true) == nil {
 		t.Fatal("destructive autoapproval")
 	}
-	if x.confirmPreview("1 create") != nil {
+	if x.confirmPreview("1 create", false) != nil {
 		t.Fatal("non-destructive explicit approval rejected")
 	}
 }
@@ -110,7 +110,7 @@ func TestCountdownReadsAndFakeClock(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &approvalRead{Reader: strings.NewReader(tc.input)}
 			x := execution{ctx: context.Background(), o: Options{Output: io.Discard, ApprovalReader: func() (cancelreader.CancelReader, error) { return r, nil }, ApprovalTicker: func() (<-chan time.Time, func()) { return make(chan time.Time), func() {} }}}
-			err := x.confirmPreview("1 create")
+			err := x.confirmPreview("1 create", false)
 			if (err == nil) != tc.ok || !r.closed {
 				t.Fatalf("err=%v closed=%v", err, r.closed)
 			}
@@ -127,7 +127,7 @@ func TestCountdownReadsAndFakeClock(t *testing.T) {
 		var output bytes.Buffer
 		stopped := false
 		x := execution{ctx: context.Background(), o: Options{Output: &output, ApprovalReader: func() (cancelreader.CancelReader, error) { return r, nil }, ApprovalTicker: func() (<-chan time.Time, func()) { return ticks, func() { stopped = true } }}}
-		if err := x.confirmPreview("1 create"); err != nil {
+		if err := x.confirmPreview("1 create", false); err != nil {
 			t.Fatal(err)
 		}
 		if !stopped || !r.closed {
@@ -149,7 +149,7 @@ func TestApprovalContextCancelsBlockedReader(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			x := execution{ctx: ctx, o: Options{Output: io.Discard, ApprovalReader: func() (cancelreader.CancelReader, error) { return r, nil }, ApprovalTicker: func() (<-chan time.Time, func()) { return make(chan time.Time), func() {} }}}
-			if err := x.confirmPreview(preview); !errors.Is(err, context.Canceled) {
+			if err := x.confirmPreview(preview, strings.Contains(preview, "delete")); !errors.Is(err, context.Canceled) {
 				t.Fatal(err)
 			}
 			if !r.closed {
@@ -165,7 +165,7 @@ func TestDestructivePhraseCancellableReader(t *testing.T) {
 	}{{"apply-destructive\n", true}, {"apply\n", false}, {"\x1b", false}, {"", false}} {
 		r := &approvalRead{Reader: strings.NewReader(tc.input)}
 		x := execution{ctx: context.Background(), approved: true, o: Options{Output: io.Discard, ApprovalReader: func() (cancelreader.CancelReader, error) { return r, nil }}}
-		if err := x.confirmPreview("1 replace"); (err == nil) != tc.ok {
+		if err := x.confirmPreview("1 replace", true); (err == nil) != tc.ok {
 			t.Fatalf("%q: %v", tc.input, err)
 		}
 	}

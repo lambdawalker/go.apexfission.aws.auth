@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"testing"
+	"time"
 )
 
 type fakeDynamo struct {
@@ -134,5 +135,33 @@ func TestGrantWritesPreserveRevocationsAndRequireManager(t *testing.T) {
 	bootstrap := db.transactions[len(db.transactions)-1].TransactItems
 	if aws.ToString(bootstrap[0].Put.ConditionExpression) != "attribute_not_exists(id)" || bootstrap[0].Put.Item["sk"].(*types.AttributeValueMemberS).Value != "BOOTSTRAP" {
 		t.Fatal("setup could restore revoked grant")
+	}
+}
+
+func TestDefaultsTimestampBelongsToPublicationNotPulumi(t *testing.T) {
+	db := &fakeDynamo{}
+	s := Store{DB: db, Table: "runtime"}
+	c := validConfig()
+	f := Fence{Table: "registry", Environment: "dev", Token: "lease", Revision: 1}
+	before := time.Now().UTC().Add(-time.Second)
+	if e := s.SyncDefaults(context.Background(), c, f); e != nil {
+		t.Fatal(e)
+	}
+	var created storedConfig
+	attributevalue.UnmarshalMap(db.transactions[0].TransactItems[1].Put.Item, &created)
+	stamp, e := time.Parse(time.RFC3339Nano, created.UpdatedAt)
+	if e != nil || stamp.Before(before) {
+		t.Fatal("new defaults weren't stamped at publication:", created.UpdatedAt)
+	}
+	db.read = db.transactions[0].TransactItems[1].Put.Item
+	db.transactions = nil
+	f.Revision++
+	if e := s.SyncDefaults(context.Background(), c, f); e != nil {
+		t.Fatal(e)
+	}
+	var unchanged storedConfig
+	attributevalue.UnmarshalMap(db.transactions[0].TransactItems[1].Put.Item, &unchanged)
+	if unchanged.UpdatedAt != created.UpdatedAt {
+		t.Fatal("identical defaults changed timestamp")
 	}
 }

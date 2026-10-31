@@ -192,3 +192,28 @@ the cache; missing/corrupt entries rebuild. Unsupported `-toolexec` wrappers fai
 rather than silently accepting an incomplete fingerprint. Local cache locks fail
 closed and never steal another build's lock. Pulumi still plans infrastructure
 normally and uses actual base64 ZIP hashes for Lambda code changes.
+
+## Reviewed plans and deployment failures
+
+Deploy approval uses resource operation steps from the saved Pulumi plan, not
+words in policy/property values. Ordinary updates mentioning DeleteFunctionConcurrency,
+replace, or destroy do not require destructive approval. Actual deletions,
+replacements and ownership removals still require the explicit phrase, including
+with --yes. Versioned V1 and documented Pulumi 3.x unwrapped plans are supported;
+unknown formats or operation types stop before apply. The exact saved plan is
+still passed to `pulumi up --plan`.
+
+Pulumi preview/up errors include redacted CLI diagnostics instead of only an exit
+status. Known environment/file secrets and common credential labels are masked;
+config/export/secret-writing commands remain suppressed. Custom Runners own their
+diagnostics policy. Default CLI output never enables --show-secrets.
+
+`runtimeDefaults.updatedAt` is a stable declaration value. The fenced runtime
+publication writes the actual update time only when effective defaults change;
+unchanged defaults retain their existing timestamp. Preview and apply must not
+compute separate wall-clock outputs.
+
+After a failure, rerun the wizard to refresh state and create a fresh reviewed
+plan. A planned apply can fail after some operations have completed, so preserve
+state and inspect the refreshed preview. Temporary plan paths are removed when
+the invocation ends; do not reuse the printed temporary path or bypass the plan.

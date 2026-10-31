@@ -35,8 +35,26 @@ func TestExternalSenderAndIsolatedRuntime(t *testing.T) {
 	b, _ := json.Marshal(values)
 	t.Setenv("PULUMI_CONFIG", string(b))
 	m := &associationMocks{resources: map[string]pulumi.MockResourceArgs{}}
-	if err := pulumi.RunErr(Deploy, pulumi.WithMocks("attestra-backend", "next-dev", m)); err != nil {
+	exported := make(chan string, 1)
+	if err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		if err := Deploy(ctx); err != nil {
+			return err
+		}
+		pulumi.ToOutput(ctx.GetCurrentExportMap()["runtimeDefaults"]).ApplyT(func(v any) any {
+			b, _ := json.Marshal(v)
+			var d struct {
+				UpdatedAt string `json:"updatedAt"`
+			}
+			_ = json.Unmarshal(b, &d)
+			exported <- d.UpdatedAt
+			return nil
+		})
+		return nil
+	}, pulumi.WithMocks("attestra-backend", "next-dev", m)); err != nil {
 		t.Fatal(err)
+	}
+	if stamp := <-exported; stamp != "1970-01-01T00:00:00Z" {
+		t.Fatalf("runtime defaults contain wall-clock timestamp %s; preview and apply must produce identical defaults", stamp)
 	}
 	for _, r := range m.resources {
 		if strings.HasPrefix(r.TypeToken, "aws:ses/") || strings.HasPrefix(r.TypeToken, "aws:route53/") {

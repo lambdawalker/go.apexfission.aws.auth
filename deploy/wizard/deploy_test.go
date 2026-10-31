@@ -57,6 +57,13 @@ func (r *cloudRunner) Run(ctx context.Context, dir string, env []string, name st
 		r.adminFailures--
 		return nil, errors.New("bootstrap unavailable")
 	}
+	if name == "pulumi" && len(args) > 0 && args[0] == "preview" {
+		if path := argument(args, "--save-plan"); path != "" {
+			if e := os.WriteFile(path, []byte(`{"version":1,"plan":{"resourcePlans":{"urn:test":{"steps":["update"]}}}}`), 0600); e != nil {
+				return nil, e
+			}
+		}
+	}
 	if name == "pulumi" {
 		if strings.Contains(call, "stack ls") {
 			items := []map[string]string{}
