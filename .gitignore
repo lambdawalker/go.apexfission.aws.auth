@@ -1,0 +1,9 @@
+/dist/
+/bin/
+.pulumi/
+Pulumi.*.yaml
+!Pulumi.yaml
+go.work
+go.work.sum
+*.local
+__pycache__/

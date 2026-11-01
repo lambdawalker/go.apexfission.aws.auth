@@ -1,0 +1,42 @@
+package artifacts
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestManifestOwnsTwentyFeatureArchives(t *testing.T) {
+	entries := Lambdas()
+	if len(entries) != 20 {
+		t.Fatalf("expected20archives,got%d", len(entries))
+	}
+	seen := map[string]bool{}
+	signin := 0
+	for _, e := range entries {
+		if seen[e.Name] {
+			t.Fatal("duplicate", e.Name)
+		}
+		seen[e.Name] = true
+		if e.Name == "admin" || e.Name == "index" {
+			t.Fatal("application command leaked into feature")
+		}
+		if !strings.HasPrefix(e.Package, Module+"/cmd/") {
+			t.Fatal(e.Package)
+		}
+		if _, err := os.Stat(filepath.Join("..", strings.TrimPrefix(e.Package, Module+"/"), "main.go")); err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(e.Package, "/signin") {
+			signin++
+		}
+	}
+	if signin != 9 {
+		t.Fatal("route archives mustshareone signinbuild", signin)
+	}
+	entries[0].Name = "mutated"
+	if Lambdas()[0].Name == "mutated" {
+		t.Fatal("manifestaliasesinternalstate")
+	}
+}
