@@ -3,11 +3,6 @@ module github.com/lambdawalker/go.apexfission.aws.auth/infrastructure
 go 1.27.3
 
 require (
-	github.com/pulumi/pulumi-aws/sdk/v7 v7.44.0
-	github.com/pulumi/pulumi/sdk/v3 v3.264.0
-)
-
-require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
@@ -131,6 +126,10 @@ require (
 	lukechampine.com/frand v1.4.2 // indirect
 )
 
-require github.com/lambdawalker/go.apexfission.aws.auth v0.0.0
+require (
+	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261101213106-f4f560037d8d
+	github.com/pulumi/pulumi-aws/sdk/v7 v7.44.0
+	github.com/pulumi/pulumi/sdk/v3 v3.264.0
+)
 
 replace github.com/lambdawalker/go.apexfission.aws.auth => ..
