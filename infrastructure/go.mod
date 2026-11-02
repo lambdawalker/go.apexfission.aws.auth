@@ -127,8 +127,7 @@ require (
 )
 
 require (
-	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261101213106-f4f560037d8d
-	github.com/pulumi/pulumi-aws/sdk/v7 v7.44.0
+	\g<1>v0.0.0-20261102001946-a78011cc27cfs/sdk/v7 v7.44.0
 	github.com/pulumi/pulumi/sdk/v3 v3.264.0
 )
 
