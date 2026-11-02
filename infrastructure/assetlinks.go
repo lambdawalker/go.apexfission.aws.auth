@@ -1,5 +1,7 @@
 package infrastructure
 
+import "github.com/lambdawalker/go.infra.composer/adapters/pulumi/awslabels"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -25,11 +27,11 @@ func deployAssetLinks(ctx *pulumi.Context, origin, zone string, apps []assetlink
 	}
 	domain := u.Hostname()
 	// CloudFront viewer certificates must be in us-east-1 regardless of stack region.
-	east, err := aws.NewProvider(ctx, "app-edge", &aws.ProviderArgs{Region: pulumi.String("us-east-1")})
+	east, err := aws.NewProvider(ctx, "app-edge", &aws.ProviderArgs{Region: pulumi.String("us-east-1")}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	cert, err := acm.NewCertificate(ctx, "app-certificate", &acm.CertificateArgs{DomainName: pulumi.String(domain), ValidationMethod: pulumi.String("DNS")}, pulumi.Provider(east))
+	cert, err := acm.NewCertificate(ctx, "app-certificate", &acm.CertificateArgs{DomainName: pulumi.String(domain), ValidationMethod: pulumi.String("DNS")}, pulumi.Provider(east), awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
@@ -37,37 +39,37 @@ func deployAssetLinks(ctx *pulumi.Context, origin, zone string, apps []assetlink
 	validationNames := pulumi.StringArray{}
 	if zone != "" {
 		option := cert.DomainValidationOptions.Index(pulumi.Int(0))
-		record, e := route53.NewRecord(ctx, "app-certificate-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: option.ResourceRecordName().Elem(), Type: option.ResourceRecordType().Elem(), Records: pulumi.StringArray{option.ResourceRecordValue().Elem()}, Ttl: pulumi.Int(300)})
+		record, e := route53.NewRecord(ctx, "app-certificate-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: option.ResourceRecordName().Elem(), Type: option.ResourceRecordType().Elem(), Records: pulumi.StringArray{option.ResourceRecordValue().Elem()}, Ttl: pulumi.Int(300)}, awslabels.Option(ctx))
 		if e != nil {
 			return e
 		}
 		validationNames = append(validationNames, record.Fqdn)
 	}
-	valid, err := acm.NewCertificateValidation(ctx, "app-certificate-validation", &acm.CertificateValidationArgs{CertificateArn: cert.Arn, ValidationRecordFqdns: validationNames}, pulumi.Provider(east))
+	valid, err := acm.NewCertificateValidation(ctx, "app-certificate-validation", &acm.CertificateValidationArgs{CertificateArn: cert.Arn, ValidationRecordFqdns: validationNames}, pulumi.Provider(east), awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	bucket, err := s3.NewBucketV2(ctx, "app-associations", &s3.BucketV2Args{ForceDestroy: pulumi.Bool(false)})
+	bucket, err := s3.NewBucketV2(ctx, "app-associations", &s3.BucketV2Args{ForceDestroy: pulumi.Bool(false)}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	private, err := s3.NewBucketPublicAccessBlock(ctx, "app-associations-private", &s3.BucketPublicAccessBlockArgs{Bucket: bucket.ID(), BlockPublicAcls: pulumi.Bool(true), BlockPublicPolicy: pulumi.Bool(true), IgnorePublicAcls: pulumi.Bool(true), RestrictPublicBuckets: pulumi.Bool(true)})
+	private, err := s3.NewBucketPublicAccessBlock(ctx, "app-associations-private", &s3.BucketPublicAccessBlockArgs{Bucket: bucket.ID(), BlockPublicAcls: pulumi.Bool(true), BlockPublicPolicy: pulumi.Bool(true), IgnorePublicAcls: pulumi.Bool(true), RestrictPublicBuckets: pulumi.Bool(true)}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	_, err = s3.NewBucketOwnershipControls(ctx, "app-associations-owner", &s3.BucketOwnershipControlsArgs{Bucket: bucket.ID(), Rule: &s3.BucketOwnershipControlsRuleArgs{ObjectOwnership: pulumi.String("BucketOwnerEnforced")}})
+	_, err = s3.NewBucketOwnershipControls(ctx, "app-associations-owner", &s3.BucketOwnershipControlsArgs{Bucket: bucket.ID(), Rule: &s3.BucketOwnershipControlsRuleArgs{ObjectOwnership: pulumi.String("BucketOwnerEnforced")}}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "app-associations-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{Bucket: bucket.ID(), Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{SseAlgorithm: pulumi.String("AES256")}}}})
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "app-associations-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{Bucket: bucket.ID(), Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{SseAlgorithm: pulumi.String("AES256")}}}}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	_, err = s3.NewBucketObjectv2(ctx, "android-assetlinks", &s3.BucketObjectv2Args{Bucket: bucket.ID(), Key: pulumi.String(".well-known/assetlinks.json"), Content: pulumi.String(content), ContentType: pulumi.String("application/json"), CacheControl: pulumi.String("no-store"), ServerSideEncryption: pulumi.String("AES256")})
+	_, err = s3.NewBucketObjectv2(ctx, "android-assetlinks", &s3.BucketObjectv2Args{Bucket: bucket.ID(), Key: pulumi.String(".well-known/assetlinks.json"), Content: pulumi.String(content), ContentType: pulumi.String("application/json"), CacheControl: pulumi.String("no-store"), ServerSideEncryption: pulumi.String("AES256")}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	access, err := cloudfront.NewOriginAccessControl(ctx, "app-associations-access", &cloudfront.OriginAccessControlArgs{Description: pulumi.String("Attestra public Android associations"), OriginAccessControlOriginType: pulumi.String("s3"), SigningBehavior: pulumi.String("always"), SigningProtocol: pulumi.String("sigv4")})
+	access, err := cloudfront.NewOriginAccessControl(ctx, "app-associations-access", &cloudfront.OriginAccessControlArgs{Description: pulumi.String("Attestra public Android associations"), OriginAccessControlOriginType: pulumi.String("s3"), SigningBehavior: pulumi.String("always"), SigningProtocol: pulumi.String("sigv4")}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
@@ -77,7 +79,7 @@ func deployAssetLinks(ctx *pulumi.Context, origin, zone string, apps []assetlink
 		DefaultCacheBehavior: &cloudfront.DistributionDefaultCacheBehaviorArgs{TargetOriginId: pulumi.String("associations"), ViewerProtocolPolicy: pulumi.String("https-only"), AllowedMethods: pulumi.StringArray{pulumi.String("GET"), pulumi.String("HEAD")}, CachedMethods: pulumi.StringArray{pulumi.String("GET"), pulumi.String("HEAD")}, CachePolicyId: pulumi.String("4135ea2d-6df8-44a3-9df3-4b5a84be39ad")},
 		Restrictions:         &cloudfront.DistributionRestrictionsArgs{GeoRestriction: &cloudfront.DistributionRestrictionsGeoRestrictionArgs{RestrictionType: pulumi.String("none")}},
 		ViewerCertificate:    &cloudfront.DistributionViewerCertificateArgs{AcmCertificateArn: valid.CertificateArn, SslSupportMethod: pulumi.String("sni-only"), MinimumProtocolVersion: pulumi.String("TLSv1.2_2021")},
-	})
+	}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
@@ -88,12 +90,12 @@ func deployAssetLinks(ctx *pulumi.Context, origin, zone string, apps []assetlink
 		}})
 		return string(b), e
 	}).(pulumi.StringOutput)
-	_, err = s3.NewBucketPolicy(ctx, "app-associations-policy", &s3.BucketPolicyArgs{Bucket: bucket.ID(), Policy: policy}, pulumi.DependsOn([]pulumi.Resource{private}))
+	_, err = s3.NewBucketPolicy(ctx, "app-associations-policy", &s3.BucketPolicyArgs{Bucket: bucket.ID(), Policy: policy}, pulumi.DependsOn([]pulumi.Resource{private}), awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
 	if zone != "" {
-		_, err = route53.NewRecord(ctx, "app-associations-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.String(domain), Type: pulumi.String("A"), Aliases: route53.RecordAliasArray{&route53.RecordAliasArgs{Name: distribution.DomainName, ZoneId: distribution.HostedZoneId, EvaluateTargetHealth: pulumi.Bool(false)}}})
+		_, err = route53.NewRecord(ctx, "app-associations-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.String(domain), Type: pulumi.String("A"), Aliases: route53.RecordAliasArray{&route53.RecordAliasArgs{Name: distribution.DomainName, ZoneId: distribution.HostedZoneId, EvaluateTargetHealth: pulumi.Bool(false)}}}, awslabels.Option(ctx))
 		if err != nil {
 			return err
 		}

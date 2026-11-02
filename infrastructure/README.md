@@ -80,3 +80,7 @@ After deployment, export `pulumi stack output runtimeDefaults --json > runtime-d
 ## Verification split
 
 This branch deploys authentication only (17 Lambda archives). Proof-key and signup/resend/confirm resources are supplied by the separate verification feature. Integration outputs are exposed in Deployment.Integration; application composition defers reset, appends verification resources and calls FinalizeReset. DeployStandalone does not include email verification.
+
+## Ownership labels
+
+Native resources receive the seven canonical `ic:` tags where their provider schema supports tags, with safe description prefixes on mutable fields. No physical identifiers change. `resourceInventory` lists every registered AWS resource, including unsupported tagging cases and child identifiers. The application supplies per-feature scopes; standalone adapters derive validated project/environment/origin defaults. Use `ownershipDomain` in the application stack to override the hostname label; shared control-plane resources use environment `shared`. Legacy SES adapter resources remain explicitly inventory-only.

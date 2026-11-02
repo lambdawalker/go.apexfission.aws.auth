@@ -1,5 +1,7 @@
 package infrastructure
 
+import "github.com/lambdawalker/go.infra.composer/adapters/pulumi/awslabels"
+
 import (
 	"errors"
 	"fmt"
@@ -28,7 +30,15 @@ func Deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	if err := Validate(cfg, opts); err != nil {
 		return nil, err
 	}
-	return deploy(ctx, cfg, opts)
+	ctx, labels, err := awslabels.Ensure(ctx, opts.Environment, cfg.Get("appOrigin"), "authentication")
+	if err != nil {
+		return nil, err
+	}
+	d, err := deploy(ctx, cfg, opts)
+	if err == nil && labels != nil {
+		err = labels.Export(ctx, "resourceInventory")
+	}
+	return d, err
 }
 func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) {
 	origin := cfg.Require("appOrigin")
@@ -68,7 +78,7 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	}
 	region := aws.GetRegionOutput(ctx, aws.GetRegionOutputArgs{}).Name()
 	account := aws.GetCallerIdentityOutput(ctx, aws.GetCallerIdentityOutputArgs{}).AccountId()
-	table, err := dynamodb.NewTable(ctx, "email-proofs", &dynamodb.TableArgs{BillingMode: pulumi.String("PAY_PER_REQUEST"), HashKey: pulumi.String("id"), Attributes: dynamodb.TableAttributeArray{&dynamodb.TableAttributeArgs{Name: pulumi.String("id"), Type: pulumi.String("S")}}, Ttl: &dynamodb.TableTtlArgs{AttributeName: pulumi.String("ttl"), Enabled: pulumi.Bool(true)}, PointInTimeRecovery: &dynamodb.TablePointInTimeRecoveryArgs{Enabled: pulumi.Bool(true)}, ServerSideEncryption: &dynamodb.TableServerSideEncryptionArgs{Enabled: pulumi.Bool(true)}})
+	table, err := dynamodb.NewTable(ctx, "email-proofs", &dynamodb.TableArgs{BillingMode: pulumi.String("PAY_PER_REQUEST"), HashKey: pulumi.String("id"), Attributes: dynamodb.TableAttributeArray{&dynamodb.TableAttributeArgs{Name: pulumi.String("id"), Type: pulumi.String("S")}}, Ttl: &dynamodb.TableTtlArgs{AttributeName: pulumi.String("ttl"), Enabled: pulumi.Bool(true)}, PointInTimeRecovery: &dynamodb.TablePointInTimeRecoveryArgs{Enabled: pulumi.Bool(true)}, ServerSideEncryption: &dynamodb.TableServerSideEncryptionArgs{Enabled: pulumi.Bool(true)}}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -77,48 +87,48 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 		return nil, err
 	}
 	reset := &ResetInventory{Control: control, Tables: pulumi.StringArray{table.Name}, TableARNs: pulumi.StringArray{table.Arn}}
-	sender, err := ses.NewDomainIdentity(ctx, "email-sender", &ses.DomainIdentityArgs{Domain: pulumi.String(senderDomain)})
+	sender, err := ses.NewDomainIdentity(ctx, "email-sender", &ses.DomainIdentityArgs{Domain: pulumi.String(senderDomain)}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
-	dkim, err := ses.NewDomainDkim(ctx, "email-sender-dkim", &ses.DomainDkimArgs{Domain: sender.Domain})
+	dkim, err := ses.NewDomainDkim(ctx, "email-sender-dkim", &ses.DomainDkimArgs{Domain: sender.Domain}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
 	if zone != "" {
-		_, err = route53.NewRecord(ctx, "ses-verify", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.String("_amazonses." + senderDomain), Type: pulumi.String("TXT"), Ttl: pulumi.Int(300), Records: pulumi.StringArray{sender.VerificationToken}})
+		_, err = route53.NewRecord(ctx, "ses-verify", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.String("_amazonses." + senderDomain), Type: pulumi.String("TXT"), Ttl: pulumi.Int(300), Records: pulumi.StringArray{sender.VerificationToken}}, awslabels.Option(ctx))
 		if err != nil {
 			return nil, err
 		}
 		for n := 0; n < 3; n++ {
 			idx := n
 			token := dkim.DkimTokens.ApplyT(func(v []string) string { return v[idx] }).(pulumi.StringOutput)
-			_, err = route53.NewRecord(ctx, fmt.Sprintf("ses-dkim-%d", n), &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.Sprintf("%s._domainkey.%s", token, senderDomain), Type: pulumi.String("CNAME"), Ttl: pulumi.Int(300), Records: pulumi.StringArray{pulumi.Sprintf("%s.dkim.amazonses.com", token)}})
+			_, err = route53.NewRecord(ctx, fmt.Sprintf("ses-dkim-%d", n), &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.Sprintf("%s._domainkey.%s", token, senderDomain), Type: pulumi.String("CNAME"), Ttl: pulumi.Int(300), Records: pulumi.StringArray{pulumi.Sprintf("%s.dkim.amazonses.com", token)}}, awslabels.Option(ctx))
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 	trust := pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)
-	challengeRole, err := iam.NewRole(ctx, "challenge-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+	challengeRole, err := iam.NewRole(ctx, "challenge-role", &iam.RoleArgs{AssumeRolePolicy: trust}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
-	_, err = iam.NewRolePolicyAttachment(ctx, "challenge-logs", &iam.RolePolicyAttachmentArgs{Role: challengeRole.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")})
+	_, err = iam.NewRolePolicyAttachment(ctx, "challenge-logs", &iam.RolePolicyAttachmentArgs{Role: challengeRole.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
-	trigger, err := lambda.NewFunction(ctx, "cognito-grant-challenge", &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: challengeRole.Arn, Code: pulumi.NewFileArchive(challengeArchive), Timeout: pulumi.Int(10), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"TABLE_NAME": table.Name}}})
+	trigger, err := lambda.NewFunction(ctx, "cognito-grant-challenge", &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: challengeRole.Arn, Code: pulumi.NewFileArchive(challengeArchive), Timeout: pulumi.Int(10), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"TABLE_NAME": table.Name}}}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
 	reset.addFunction(trigger)
-	permission, err := lambda.NewPermission(ctx, "allow-cognito-challenge", &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: trigger.Name, Principal: pulumi.String("cognito-idp.amazonaws.com"), SourceAccount: account, SourceArn: pulumi.Sprintf("arn:aws:cognito-idp:%s:%s:userpool/*", region, account)})
+	permission, err := lambda.NewPermission(ctx, "allow-cognito-challenge", &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: trigger.Name, Principal: pulumi.String("cognito-idp.amazonaws.com"), SourceAccount: account, SourceArn: pulumi.Sprintf("arn:aws:cognito-idp:%s:%s:userpool/*", region, account)}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
 	challengePolicy := pulumi.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"dynamodb:UpdateItem","Resource":%q}]}`, table.Arn)
-	challengeGrant, err := iam.NewRolePolicy(ctx, "challenge-permissions", &iam.RolePolicyArgs{Role: challengeRole.ID(), Policy: challengePolicy})
+	challengeGrant, err := iam.NewRolePolicy(ctx, "challenge-permissions", &iam.RolePolicyArgs{Role: challengeRole.ID(), Policy: challengePolicy}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -138,45 +148,45 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 		AccountRecoverySetting: &cognito.UserPoolAccountRecoverySettingArgs{RecoveryMechanisms: cognito.UserPoolAccountRecoverySettingRecoveryMechanismArray{
 			&cognito.UserPoolAccountRecoverySettingRecoveryMechanismArgs{Name: pulumi.String("admin_only"), Priority: pulumi.Int(1)},
 		}},
-	}, pulumi.DependsOn([]pulumi.Resource{permission, challengeGrant}))
+	}, pulumi.DependsOn([]pulumi.Resource{permission, challengeGrant}), awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
 	reset.Pool = pool.ID()
 	reset.PoolARN = pool.Arn
-	client, err := cognito.NewUserPoolClient(ctx, "public-auth-client", &cognito.UserPoolClientArgs{UserPoolId: pool.ID(), GenerateSecret: pulumi.Bool(false), ExplicitAuthFlows: pulumi.StringArray{pulumi.String("ALLOW_CUSTOM_AUTH"), pulumi.String("ALLOW_USER_AUTH"), pulumi.String("ALLOW_REFRESH_TOKEN_AUTH")}, PreventUserExistenceErrors: pulumi.String("ENABLED"), AuthSessionValidity: pulumi.Int(3)})
+	client, err := cognito.NewUserPoolClient(ctx, "public-auth-client", &cognito.UserPoolClientArgs{UserPoolId: pool.ID(), GenerateSecret: pulumi.Bool(false), ExplicitAuthFlows: pulumi.StringArray{pulumi.String("ALLOW_CUSTOM_AUTH"), pulumi.String("ALLOW_USER_AUTH"), pulumi.String("ALLOW_REFRESH_TOKEN_AUTH")}, PreventUserExistenceErrors: pulumi.String("ENABLED"), AuthSessionValidity: pulumi.Int(3)}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
-	httpAPI, err := apigatewayv2.NewApi(ctx, "email-http-api", &apigatewayv2.ApiArgs{ProtocolType: pulumi.String("HTTP"), CorsConfiguration: &apigatewayv2.ApiCorsConfigurationArgs{AllowOrigins: pulumi.StringArray{pulumi.String(origin)}, AllowMethods: pulumi.StringArray{pulumi.String("POST"), pulumi.String("GET")}, AllowHeaders: pulumi.StringArray{pulumi.String("content-type"), pulumi.String("authorization")}, MaxAge: pulumi.Int(300)}})
+	httpAPI, err := apigatewayv2.NewApi(ctx, "email-http-api", &apigatewayv2.ApiArgs{ProtocolType: pulumi.String("HTTP"), CorsConfiguration: &apigatewayv2.ApiCorsConfigurationArgs{AllowOrigins: pulumi.StringArray{pulumi.String(origin)}, AllowMethods: pulumi.StringArray{pulumi.String("POST"), pulumi.String("GET")}, AllowHeaders: pulumi.StringArray{pulumi.String("content-type"), pulumi.String("authorization")}, MaxAge: pulumi.Int(300)}}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
 	// Registration is authorized by Cognito with the caller's access token, not IAM.
 	// Keep each endpoint in a separate Lambda, as with email verification.
 	for _, spec := range []struct{ name, path string }{{"passkeyoptions", "passkeys/options"}, {"passkeycomplete", "passkeys/complete"}} {
-		role, e := iam.NewRole(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+		role, e := iam.NewRole(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
-		_, e = iam.NewRolePolicyAttachment(ctx, spec.name+"-logs", &iam.RolePolicyAttachmentArgs{Role: role.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")})
+		_, e = iam.NewRolePolicyAttachment(ctx, spec.name+"-logs", &iam.RolePolicyAttachmentArgs{Role: role.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
-		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archives[spec.name]), Timeout: pulumi.Int(20)})
+		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(archives[spec.name]), Timeout: pulumi.Int(20)}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
 		reset.addFunction(fn)
-		integration, e := apigatewayv2.NewIntegration(ctx, spec.name+"-integration", &apigatewayv2.IntegrationArgs{ApiId: httpAPI.ID(), IntegrationType: pulumi.String("AWS_PROXY"), IntegrationUri: fn.InvokeArn, PayloadFormatVersion: pulumi.String("2.0")})
+		integration, e := apigatewayv2.NewIntegration(ctx, spec.name+"-integration", &apigatewayv2.IntegrationArgs{ApiId: httpAPI.ID(), IntegrationType: pulumi.String("AWS_PROXY"), IntegrationUri: fn.InvokeArn, PayloadFormatVersion: pulumi.String("2.0")}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
-		_, e = apigatewayv2.NewRoute(ctx, spec.name+"-route", &apigatewayv2.RouteArgs{ApiId: httpAPI.ID(), RouteKey: pulumi.String("POST /" + spec.path), Target: pulumi.Sprintf("integrations/%s", integration.ID())})
+		_, e = apigatewayv2.NewRoute(ctx, spec.name+"-route", &apigatewayv2.RouteArgs{ApiId: httpAPI.ID(), RouteKey: pulumi.String("POST /" + spec.path), Target: pulumi.Sprintf("integrations/%s", integration.ID())}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
-		_, e = lambda.NewPermission(ctx, "allow-"+spec.name, &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: fn.Name, Principal: pulumi.String("apigateway.amazonaws.com"), SourceArn: pulumi.Sprintf("%s/*/POST/%s", httpAPI.ExecutionArn, spec.path)})
+		_, e = lambda.NewPermission(ctx, "allow-"+spec.name, &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: fn.Name, Principal: pulumi.String("apigateway.amazonaws.com"), SourceArn: pulumi.Sprintf("%s/*/POST/%s", httpAPI.ExecutionArn, spec.path)}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
@@ -185,11 +195,11 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 		return nil, err
 	}
 	for _, spec := range []struct{ name, path string }{{"auth-email-start", "email/start"}, {"auth-email-complete", "email/complete"}, {"auth-passkey-start", "passkey/start"}, {"auth-passkey-complete", "passkey/complete"}, {"auth-refresh", "refresh"}, {"auth-status", "status"}, {"auth-password-start", "password/start"}, {"auth-password-complete", "password/complete"}, {"auth-password-set", "password/set"}} {
-		role, e := iam.NewRole(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
+		role, e := iam.NewRole(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
-		_, e = iam.NewRolePolicyAttachment(ctx, spec.name+"-logs", &iam.RolePolicyAttachmentArgs{Role: role.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")})
+		_, e = iam.NewRolePolicyAttachment(ctx, spec.name+"-logs", &iam.RolePolicyAttachmentArgs{Role: role.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
@@ -207,26 +217,26 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 			policy := pulumi.All(table.Arn, reset.CaptureTableARN, pool.Arn, opts.RuntimeTableARN).ApplyT(func(v []interface{}) string {
 				return enrollmentPolicy(spec.path, opts.Environment, v[3].(string), v[0].(string), v[1].(string), v[2].(string))
 			}).(pulumi.StringOutput)
-			grant, e := iam.NewRolePolicy(ctx, spec.name+"-enrollment", &iam.RolePolicyArgs{Role: role.Name, Policy: policy})
+			grant, e := iam.NewRolePolicy(ctx, spec.name+"-enrollment", &iam.RolePolicyArgs{Role: role.Name, Policy: policy}, awslabels.Option(ctx))
 			if e != nil {
 				return nil, e
 			}
 			dependencies = append(dependencies, grant)
 		}
-		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(authArchives[spec.name]), Timeout: pulumi.Int(20), Environment: &lambda.FunctionEnvironmentArgs{Variables: variables}}, pulumi.DependsOn(dependencies))
+		fn, e := lambda.NewFunction(ctx, spec.name, &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: role.Arn, Code: pulumi.NewFileArchive(authArchives[spec.name]), Timeout: pulumi.Int(20), Environment: &lambda.FunctionEnvironmentArgs{Variables: variables}}, pulumi.DependsOn(dependencies), awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
 		reset.addFunction(fn)
-		integration, e := apigatewayv2.NewIntegration(ctx, spec.name+"-integration", &apigatewayv2.IntegrationArgs{ApiId: httpAPI.ID(), IntegrationType: pulumi.String("AWS_PROXY"), IntegrationUri: fn.InvokeArn, PayloadFormatVersion: pulumi.String("2.0")})
+		integration, e := apigatewayv2.NewIntegration(ctx, spec.name+"-integration", &apigatewayv2.IntegrationArgs{ApiId: httpAPI.ID(), IntegrationType: pulumi.String("AWS_PROXY"), IntegrationUri: fn.InvokeArn, PayloadFormatVersion: pulumi.String("2.0")}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
-		_, e = apigatewayv2.NewRoute(ctx, spec.name+"-route", &apigatewayv2.RouteArgs{ApiId: httpAPI.ID(), RouteKey: pulumi.String("POST /auth/" + spec.path), Target: pulumi.Sprintf("integrations/%s", integration.ID())})
+		_, e = apigatewayv2.NewRoute(ctx, spec.name+"-route", &apigatewayv2.RouteArgs{ApiId: httpAPI.ID(), RouteKey: pulumi.String("POST /auth/" + spec.path), Target: pulumi.Sprintf("integrations/%s", integration.ID())}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
-		_, e = lambda.NewPermission(ctx, "allow-"+spec.name, &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: fn.Name, Principal: pulumi.String("apigateway.amazonaws.com"), SourceArn: pulumi.Sprintf("%s/*/POST/auth/%s", httpAPI.ExecutionArn, spec.path)})
+		_, e = lambda.NewPermission(ctx, "allow-"+spec.name, &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: fn.Name, Principal: pulumi.String("apigateway.amazonaws.com"), SourceArn: pulumi.Sprintf("%s/*/POST/auth/%s", httpAPI.ExecutionArn, spec.path)}, awslabels.Option(ctx))
 		if e != nil {
 			return nil, e
 		}
@@ -243,7 +253,7 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 		}
 		resetName = resetFn.Name
 	}
-	stage, err := apigatewayv2.NewStage(ctx, "email-stage", &apigatewayv2.StageArgs{ApiId: httpAPI.ID(), Name: pulumi.String("$default"), AutoDeploy: pulumi.Bool(true), DefaultRouteSettings: &apigatewayv2.StageDefaultRouteSettingsArgs{ThrottlingBurstLimit: pulumi.Int(20), ThrottlingRateLimit: pulumi.Float64(10)}})
+	stage, err := apigatewayv2.NewStage(ctx, "email-stage", &apigatewayv2.StageArgs{ApiId: httpAPI.ID(), Name: pulumi.String("$default"), AutoDeploy: pulumi.Bool(true), DefaultRouteSettings: &apigatewayv2.StageDefaultRouteSettingsArgs{ThrottlingBurstLimit: pulumi.Int(20), ThrottlingRateLimit: pulumi.Float64(10)}}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}

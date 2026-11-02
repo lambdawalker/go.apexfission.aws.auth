@@ -1,5 +1,7 @@
 package infrastructure
 
+import "github.com/lambdawalker/go.infra.composer/adapters/pulumi/awslabels"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -33,18 +35,18 @@ func (i *ResetInventory) addFunction(fn *lambda.Function) {
 	i.FunctionARNs = append(i.FunctionARNs, fn.Arn)
 }
 func resetControl(ctx *pulumi.Context) (*dynamodb.Table, error) {
-	return dynamodb.NewTable(ctx, "environment-reset-control", &dynamodb.TableArgs{BillingMode: pulumi.String("PAY_PER_REQUEST"), HashKey: pulumi.String("id"), Attributes: dynamodb.TableAttributeArray{&dynamodb.TableAttributeArgs{Name: pulumi.String("id"), Type: pulumi.String("S")}}, ServerSideEncryption: &dynamodb.TableServerSideEncryptionArgs{Enabled: pulumi.Bool(true)}, PointInTimeRecovery: &dynamodb.TablePointInTimeRecoveryArgs{Enabled: pulumi.Bool(true)}})
+	return dynamodb.NewTable(ctx, "environment-reset-control", &dynamodb.TableArgs{BillingMode: pulumi.String("PAY_PER_REQUEST"), HashKey: pulumi.String("id"), Attributes: dynamodb.TableAttributeArray{&dynamodb.TableAttributeArgs{Name: pulumi.String("id"), Type: pulumi.String("S")}}, ServerSideEncryption: &dynamodb.TableServerSideEncryptionArgs{Enabled: pulumi.Bool(true)}, PointInTimeRecovery: &dynamodb.TablePointInTimeRecoveryArgs{Enabled: pulumi.Bool(true)}}, awslabels.Option(ctx))
 }
 func deployReset(ctx *pulumi.Context, cfg Config, opts Options, i *ResetInventory) (*lambda.Function, error) {
 	enabled := opts.Environment != "prod" && opts.Environment != "production" && cfg.Get("environmentClass") != "production"
 	if cfg.Get("environmentResetEnabled") != "" {
 		enabled = cfg.GetBool("environmentResetEnabled")
 	}
-	role, e := iam.NewRole(ctx, "environment-reset-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)})
+	role, e := iam.NewRole(ctx, "environment-reset-role", &iam.RoleArgs{AssumeRolePolicy: pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)}, awslabels.Option(ctx))
 	if e != nil {
 		return nil, e
 	}
-	_, e = iam.NewRolePolicyAttachment(ctx, "environment-reset-logs", &iam.RolePolicyAttachmentArgs{Role: role.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")})
+	_, e = iam.NewRolePolicyAttachment(ctx, "environment-reset-logs", &iam.RolePolicyAttachmentArgs{Role: role.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")}, awslabels.Option(ctx))
 	if e != nil {
 		return nil, e
 	}
@@ -62,7 +64,7 @@ func deployReset(ctx *pulumi.Context, cfg Config, opts Options, i *ResetInventor
 		b, e := json.Marshal(out)
 		return string(b), e
 	}).(pulumi.StringOutput)
-	grant, e := iam.NewRolePolicy(ctx, "environment-reset-data", &iam.RolePolicyArgs{Role: role.ID(), Policy: policy})
+	grant, e := iam.NewRolePolicy(ctx, "environment-reset-data", &iam.RolePolicyArgs{Role: role.ID(), Policy: policy}, awslabels.Option(ctx))
 	if e != nil {
 		return nil, e
 	}
@@ -71,19 +73,19 @@ func deployReset(ctx *pulumi.Context, cfg Config, opts Options, i *ResetInventor
 		return string(b), e
 	}).(pulumi.StringOutput)
 	archive, _ := filepath.Abs(filepath.Join(opts.ArtifactDir, "environment-reset.zip"))
-	fn, e := lambda.NewFunction(ctx, "environment-reset", &lambda.FunctionArgs{Name: pulumi.String(opts.ResetFunctionName), Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Timeout: pulumi.Int(60), MemorySize: pulumi.Int(256), Code: pulumi.NewFileArchive(archive), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_MANIFEST": manifest, "RESET_TABLE": i.Control.Name, "ENVIRONMENT": pulumi.String(opts.Environment), "RESET_ENABLED": pulumi.String(fmt.Sprint(enabled))}}}, pulumi.DependsOn([]pulumi.Resource{grant}))
+	fn, e := lambda.NewFunction(ctx, "environment-reset", &lambda.FunctionArgs{Name: pulumi.String(opts.ResetFunctionName), Role: role.Arn, Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Timeout: pulumi.Int(60), MemorySize: pulumi.Int(256), Code: pulumi.NewFileArchive(archive), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"RESET_MANIFEST": manifest, "RESET_TABLE": i.Control.Name, "ENVIRONMENT": pulumi.String(opts.Environment), "RESET_ENABLED": pulumi.String(fmt.Sprint(enabled))}}}, pulumi.DependsOn([]pulumi.Resource{grant}), awslabels.Option(ctx))
 	if e != nil {
 		return nil, e
 	}
-	rule, e := cloudwatch.NewEventRule(ctx, "environment-reset-sweep", &cloudwatch.EventRuleArgs{ScheduleExpression: pulumi.String("rate(1 minute)")})
+	rule, e := cloudwatch.NewEventRule(ctx, "environment-reset-sweep", &cloudwatch.EventRuleArgs{ScheduleExpression: pulumi.String("rate(1 minute)")}, awslabels.Option(ctx))
 	if e != nil {
 		return nil, e
 	}
-	_, e = cloudwatch.NewEventTarget(ctx, "environment-reset-target", &cloudwatch.EventTargetArgs{Rule: rule.Name, Arn: fn.Arn, Input: pulumi.String(`{"action":"work"}`)})
+	_, e = cloudwatch.NewEventTarget(ctx, "environment-reset-target", &cloudwatch.EventTargetArgs{Rule: rule.Name, Arn: fn.Arn, Input: pulumi.String(`{"action":"work"}`)}, awslabels.Option(ctx))
 	if e != nil {
 		return nil, e
 	}
-	_, e = lambda.NewPermission(ctx, "environment-reset-schedule", &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: fn.Name, Principal: pulumi.String("events.amazonaws.com"), SourceArn: rule.Arn})
+	_, e = lambda.NewPermission(ctx, "environment-reset-schedule", &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: fn.Name, Principal: pulumi.String("events.amazonaws.com"), SourceArn: rule.Arn}, awslabels.Option(ctx))
 	ctx.Export("environmentResetEnabled", pulumi.Bool(enabled))
 	return fn, e
 }
