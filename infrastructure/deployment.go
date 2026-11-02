@@ -3,7 +3,6 @@
 package infrastructure
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,9 +34,13 @@ type Options struct {
 	RuntimeTableARN   pulumi.StringInput
 	Environment       string
 	ResetFunctionName string
+	// DeferReset lets the application finalize a reset manifest after composing all features.
+	DeferReset bool
 }
 
 type Deployment struct {
+	Integration      map[string]pulumi.StringOutput
+	ResetInventory   *ResetInventory
 	RuntimeTableName pulumi.StringOutput
 	RuntimeTableARN  pulumi.StringOutput
 	// RuntimeTable is non-nil only when DeployStandalone creates the isolated table.
@@ -83,14 +86,6 @@ func Validate(cfg Config, opts Options) error {
 	}
 	if err := validate(cfg.Get("appOrigin"), cfg.Get("senderDomain"), cfg.Get("senderAddress")); err != nil {
 		return err
-	}
-	key := cfg.Get("proofKey")
-	if key == "" {
-		return fmt.Errorf("proofKey must be supplied as Pulumi secret configuration")
-	}
-	b, e := base64.StdEncoding.DecodeString(key)
-	if e != nil || len(b) < 32 {
-		return fmt.Errorf("proofKey must be base64 of at least 32 random bytes")
 	}
 	if domain := cfg.Get("apiDomain"); domain != "" {
 		if len(domain) > 253 || !strings.Contains(domain, ".") {

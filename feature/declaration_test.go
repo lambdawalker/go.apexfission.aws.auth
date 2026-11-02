@@ -23,13 +23,13 @@ func TestDeclarationRequiresApplicationRuntimeBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Resources()) != 1 || p.Resources()[0].Kind != Kind || len(p.Exports()) != 9 {
+	if len(p.Resources()) != 1 || p.Resources()[0].Kind != Kind || len(p.Exports()) != 19 {
 		t.Fatal("incomplete featuredeclaration", p)
 	}
 }
 func TestConfigurationInventoryMatchesSupportedReaders(t *testing.T) {
 	d := ConfigurationContract("authentication", "dev")
-	if len(d.Properties) != 5 || len(d.Consumers) != 5 || len(d.Bindings) != 0 {
+	if len(d.Properties) != 3 || len(d.Consumers) != 3 || len(d.Bindings) != 0 {
 		t.Fatal(d)
 	}
 	for _, p := range d.Properties {

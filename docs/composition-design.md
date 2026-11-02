@@ -34,3 +34,7 @@ Proof-key material remains unchanged during extraction. New infrastructure store
 ## Verification and rollout
 
 Preserve existing runtime tests. Add failing tests for import separation, manifest completeness, composer binding gaps/cycles, strict configuration sources, secret retrieval/error redaction, missing artifact preflight, native deferred runtime bindings and no PROOF_KEY environment values. Use Pulumi mocks only; no deployment for validation. Test/build application root, shared/backend infra and operator modules, plus Go/Node/Python helper checks as applicable. Pin published feature/core commits, eliminate external sibling replaces from application manifests, and open feature/application PRs. A legacy README notice may point to the extraction; no runtime deletion or redirect of live traffic.
+
+## Two-feature branch
+
+Email verification implementation and resources are extracted to go.apexfission.aws.verifyemail. Authentication retains the existing email-proofs logical table for grants/enrollment (legacy name); verification owns the new verification-proofs table. The application injects identity.email-enrollment/v1 and combines reset inventories. This branch is designed for integration testing; no live resource adoption is automatic.

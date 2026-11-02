@@ -77,6 +77,10 @@ There are no global resource transformations or global mutable option hooks.
 
 After deployment, export `pulumi stack output runtimeDefaults --json > runtime-defaults.json`. From the feature root use `go run ./cmd/seed-runtime -table TABLE -environment ENV -defaults-file runtime-defaults.json`. The seed consumes the exported policy, including disabled capture; it never invents defaults or overwrites an existing policy.
 
-## Ownership labels on main
+## Verification split
 
-Native deployments use the merged infra.composer awslabels helpers and export resourceInventory with identifiers, coverage and parent references. Composed applications supply their scope; standalone deployments derive validated project/environment/origin defaults. Names and integrated email verification remain unchanged. Legacy SES resources are recorded as inventory-only, and immutable policy descriptions are preserved.
+Deploys authentication only (17 Lambda archives). Proof-key and signup/resend/confirm resources are supplied by the separate verification feature. Integration outputs are exposed in Deployment.Integration; application composition defers reset, appends verification resources and calls FinalizeReset. DeployStandalone does not include email verification.
+
+## Ownership labels
+
+Native resources receive the seven canonical `ic:` tags where their provider schema supports tags, with `domain ENV | go.apexfission.aws.auth` descriptions on mutable fields. No physical identifiers change. `resourceInventory` lists every registered AWS resource, including unsupported tagging cases and child identifiers. The application supplies per-feature scopes; standalone adapters derive validated project/environment/origin defaults. Use `ownershipDomain` in the application stack to override the hostname label; shared control-plane resources use environment `shared`. Legacy SES adapter resources remain explicitly inventory-only.

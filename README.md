@@ -2,7 +2,7 @@
 
 Reusable AWS authentication feature for applications composed with [go.infra.composer](https://github.com/lambdawalker/go.infra.composer).
 
-Extracted from [go.attestra.aws.auth at 4607807](https://github.com/lambdawalker/go.attestra.aws.auth/tree/4607807ab0346f4a38532982889fe2e56954412e). Existing email proof, passkey/password sign-in, ID capture/extraction, runtime policy and auth-only reset behavior are preserved. The application [go.attestra.aws](https://github.com/lambdawalker/go.attestra.aws) owns admin/index, environments, credentials and deployment orchestration.
+Extracted from [go.attestra.aws.auth at 4607807](https://github.com/lambdawalker/go.attestra.aws.auth/tree/4607807ab0346f4a38532982889fe2e56954412e). Passkey/password sign-in, ID capture/extraction, runtime policy and auth-only reset behavior are preserved. The application [go.attestra.aws](https://github.com/lambdawalker/go.attestra.aws) owns admin/index, environments, credentials and deployment orchestration.
 
 **Status:** source implementation with unit/race/native mock coverage; no cloud deployment or live state migration performed. Go 1.27.3+. No release tag is implied by source availability.
 
@@ -22,7 +22,7 @@ Offerings `identity` and `api` expose pool/client/issuer and API contracts. Othe
 
 ## Runtime and infrastructure modules
 
-The root module contains reusable runtime packages and 20 feature Lambda artifacts. It imports no application package and deploys no admin UI.
+The root module contains reusable runtime packages and 17 feature Lambda artifacts. It imports no application package and deploys no admin UI.
 
 The optional [infrastructure module](infrastructure/README.md) exports native `Deploy`, `Validate` and `DeployStandalone`. Pass a configuration reader, artifact directory, logical environment, application-owned reset function name and deferred Pulumi runtime-table bindings. It returns typed API/pool/client/issuer/reset outputs. No unresolved Output is flattened into a deployment string.
 
@@ -36,7 +36,7 @@ go vet ./...
 go run ./cmd/build-lambdas -out ./dist
 ```
 
-The [artifact manifest](artifacts/manifest.go) is authoritative: 20 archives, 12 unique command packages, nine sign-in routes sharing one binary. Archives contain Linux/ARM64 executable `bootstrap`. Applications can build the manifest's pinned Go package paths without cloning this repository beside the application.
+The [artifact manifest](artifacts/manifest.go) is authoritative: 17 archives, 9 unique command packages, nine sign-in routes sharing one binary. Archives contain Linux/ARM64 executable `bootstrap`. Applications can build the manifest's pinned Go package paths without cloning this repository beside the application.
 
 From `infrastructure`, run `go test -race ./...` and `go vet ./...` for native mock tests. There is no cloud account or Pulumi CLI requirement for those tests.
 
@@ -60,10 +60,10 @@ go run ./cmd/seed-runtime -table TABLE -environment ENV -defaults-file runtime-d
 
 The seed command checks environment/schema, uses conditional transactional initialization and preserves existing overrides. It does not substitute freshly generated defaults: a disabled capture policy stays disabled. It makes AWS calls only when explicitly invoked; never run it during preview or documentation validation.
 
-## Secret delivery and compatibility
+## Email verification extraction
 
-The caller's existing base64 proof key is persisted as a secret version in AWS Secrets Manager. Email Lambdas receive only `PROOF_KEY_SECRET_ARN` and `PROOF_KEY_SECRET_VERSION`, plus exact-secret read permission. They retrieve the pinned key once at cold start; there is no per-invocation remote read and no plaintext `PROOF_KEY` fallback. Key bytes are not generated or rotated by the infrastructure library.
+Email proof verification has moved to [go.apexfission.aws.verifyemail](https://github.com/lambdawalker/go.apexfission.aws.verifyemail). This branch owns 17 authentication archives (including the reset worker); verification owns the other three. Authentication's runtime module does not depend on verification. `email_integration` exports the structural `identity.email-enrollment/v1` contract: pool/client, grants table, host API, sender identity, region/account. The verification adapter uses those injected native resources and owns its proof table and secret delivery.
 
-Pinned-version reading is not automatic rotation. A future key change needs an explicit Lambda rollout and an outstanding-proof/old-client compatibility plan. Existing clients, data, domains and sessions are not migrated merely by merging this code.
+`DeployStandalone` now means authentication-only: it does not register /signup, /resend or /confirm. Applications that need email enrollment must compose the verification feature as demonstrated by go.attestra.aws. `Options.DeferReset` and `Deployment.ResetInventory` let an application add other feature resources and invoke `FinalizeReset` once after composition. An auth-only caller can retain the default immediate reset deployment.
 
-See [extraction design](docs/composition-design.md) and the application's [migration guide](https://github.com/lambdawalker/go.attestra.aws/blob/main/docs/migration.md). Production promotion, data transfer, aliases and live-state adoption remain separate reviewed operations.
+This changes resource ownership and table boundaries. It does not migrate live resources, users, grants or pending proofs, and it does not rotate any keys. Use the application migration guide before adopting an existing stack.

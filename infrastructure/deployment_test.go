@@ -82,12 +82,13 @@ func TestNativeDeploymentRetainsRuntimeAndSecretBindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := m.resources["email-signup"].Inputs["description"].StringValue(); got != "dev.example.com ISOLATED | go.apexfission.aws.auth" {
-		t.Fatal(got)
+	for _, r := range m.resources {
+		if r.Name == "email-signup" || r.Name == "email-proof-key" || r.Name == "verification-proofs" {
+			t.Fatalf("verification ownership leaked: %s", r.Name)
+		}
 	}
-	tags := m.resources["email-signup"].Inputs["tags"]
-	if !tags.IsObject() || tags.ObjectValue()["ic:feature"].StringValue() != "authentication" || tags.ObjectValue()["ic:environment"].StringValue() != "isolated" {
-		t.Fatal("main email verification Lambda is missing authentication ownership")
+	if got := m.resources["cognito-grant-challenge"].Inputs["description"].StringValue(); got != "dev.example.com ISOLATED | go.apexfission.aws.auth" {
+		t.Fatal(got)
 	}
 	count := 0
 	for _, r := range m.resources {
@@ -118,8 +119,8 @@ func TestNativeDeploymentRetainsRuntimeAndSecretBindings(t *testing.T) {
 			}
 		}
 	}
-	if count != 20 {
-		t.Fatalf("got %d Lambda functions; want 20", count)
+	if count != 17 {
+		t.Fatalf("got %d Lambda functions; want 17", count)
 	}
 	for _, name := range []string{"app-config-data", "capture-grant", "auth-status-enrollment", "auth-password-set-enrollment"} {
 		if !strings.Contains(m.resources[name].Inputs["policy"].StringValue(), "arn:runtime:shared-id") {
@@ -141,12 +142,6 @@ func TestNativeDeploymentRetainsRuntimeAndSecretBindings(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("shared runtime native dependency lost for %s: %v", name, dep)
-		}
-	}
-	for _, name := range []string{"signup", "resend", "confirm"} {
-		p := m.resources[name+"-permissions"].Inputs["policy"].StringValue()
-		if !strings.Contains(p, `"Action":"secretsmanager:GetSecretValue","Effect":"Allow","Resource":"arn:example:email-proof-key"`) {
-			t.Fatalf("missing exact secret grant: %s", p)
 		}
 	}
 	if m.resources["environment-reset"].Inputs["name"].StringValue() != "application-reset-isolated" {
