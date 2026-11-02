@@ -1,5 +1,7 @@
 package infrastructure
 
+import "github.com/lambdawalker/go.infra.composer/adapters/pulumi/awslabels"
+
 import (
 	"crypto/sha256"
 	"fmt"
@@ -39,11 +41,15 @@ func DeployStandalone(ctx *pulumi.Context, cfg Config, opts Options) (*Deploymen
 	if err := Validate(cfg, checked); err != nil {
 		return nil, err
 	}
+	ctx, labels, err := awslabels.Ensure(ctx, opts.Environment, cfg.Get("appOrigin"), "authentication")
+	if err != nil {
+		return nil, err
+	}
 	table, err := dynamodb.NewTable(ctx, "auth-runtime-configuration", &dynamodb.TableArgs{
 		BillingMode: pulumi.String("PAY_PER_REQUEST"), HashKey: pulumi.String("id"), RangeKey: pulumi.String("sk"),
 		Attributes:           dynamodb.TableAttributeArray{&dynamodb.TableAttributeArgs{Name: pulumi.String("id"), Type: pulumi.String("S")}, &dynamodb.TableAttributeArgs{Name: pulumi.String("sk"), Type: pulumi.String("S")}},
 		ServerSideEncryption: &dynamodb.TableServerSideEncryptionArgs{Enabled: pulumi.Bool(true)}, PointInTimeRecovery: &dynamodb.TablePointInTimeRecoveryArgs{Enabled: pulumi.Bool(true)}, DeletionProtectionEnabled: pulumi.Bool(true),
-	})
+	}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -54,5 +60,10 @@ func DeployStandalone(ctx *pulumi.Context, cfg Config, opts Options) (*Deploymen
 		return nil, err
 	}
 	d.RuntimeTable = table
+	if labels != nil {
+		if err := labels.Export(ctx, "resourceInventory"); err != nil {
+			return nil, err
+		}
+	}
 	return d, nil
 }
