@@ -16,7 +16,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func deployCapture(ctx *pulumi.Context, cfg Config, opts Options, api *apigatewayv2.Api, pool *cognito.UserPool, client *cognito.UserPoolClient, region pulumi.StringOutput, reset *resetInventory) error {
+func deployCapture(ctx *pulumi.Context, cfg Config, opts Options, api *apigatewayv2.Api, pool *cognito.UserPool, client *cognito.UserPoolClient, region pulumi.StringOutput, reset *ResetInventory) error {
 	reserved, workerMax, err := parseCaptureConcurrency(cfg.Get("captureReservedConcurrency"), cfg.Get("captureWorkerMaxConcurrency"))
 	if err != nil {
 		return err

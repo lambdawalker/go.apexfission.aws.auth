@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
@@ -24,8 +23,8 @@ func main() {
 	if e != nil {
 		log.Fatal("reset configuration unavailable")
 	}
-	var manifest envreset.Manifest
-	if json.Unmarshal([]byte(os.Getenv("RESET_MANIFEST")), &manifest) != nil || len(manifest.Functions) == 0 || len(manifest.Tables) != 2 || manifest.Pool == "" || manifest.Bucket == "" || len(manifest.Queues) != 2 || os.Getenv("RESET_TABLE") == "" {
+	manifest, e := envreset.ParseManifest([]byte(os.Getenv("RESET_MANIFEST")), os.Getenv("RESET_TABLE"))
+	if e != nil {
 		log.Fatal("invalid reset inventory")
 	}
 	db := dynamodb.NewFromConfig(cfg)

@@ -9,9 +9,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.7
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.75.6
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.69.1
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.42.1
-	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.76.0
 	github.com/aws/smithy-go v1.28.7
+	github.com/lambdawalker/go.infra.composer v0.0.0-20261101203048-2628bc245bc6
 )
 
 require (
@@ -28,5 +27,4 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0 // indirect
-	github.com/lambdawalker/go.infra.composer v0.0.0-20261101203048-2628bc245bc6
 )

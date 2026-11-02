@@ -1,8 +1,6 @@
 package infrastructure
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/lambdawalker/go.apexfission.aws.auth/assetlinks"
@@ -19,7 +17,6 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/lambda"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/route53"
-	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/secretsmanager"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/ses"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -38,17 +35,8 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	senderDomain := cfg.Require("senderDomain")
 	senderAddress := cfg.Require("senderAddress")
 	zone := cfg.Get("route53ZoneId")
-	diagnosticMode := cfg.Get("diagnosticMode") == "true"
-	proofKey := cfg.RequireSecret("proofKey")
 	if err := validate(origin, senderDomain, senderAddress); err != nil {
 		return nil, err
-	}
-	// Pulumi marks the value secret; only the API Lambdas receive the encoded key.
-	if v := cfg.Get("proofKey"); v != "" {
-		b, e := base64.StdEncoding.DecodeString(v)
-		if e != nil || len(b) < 32 {
-			return nil, errors.New("proofKey must be base64 of at least 32 random bytes")
-		}
 	}
 	challengeArchive, _ := filepath.Abs(filepath.Join(opts.ArtifactDir, "challenge.zip"))
 	authArchives := map[string]string{}
@@ -56,10 +44,10 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 		authArchives[name], _ = filepath.Abs(filepath.Join(opts.ArtifactDir, name+".zip"))
 	}
 	archives := map[string]string{}
-	for _, name := range []string{"signup", "resend", "confirm", "passkeyoptions", "passkeycomplete"} {
+	for _, name := range []string{"passkeyoptions", "passkeycomplete"} {
 		archives[name], _ = filepath.Abs(filepath.Join(opts.ArtifactDir, name+".zip"))
 	}
-	for _, path := range []string{archives["signup"], archives["resend"], archives["confirm"], archives["passkeyoptions"], archives["passkeycomplete"], challengeArchive, authArchives["auth-email-start"], authArchives["auth-email-complete"], authArchives["auth-passkey-start"], authArchives["auth-passkey-complete"], authArchives["auth-refresh"], authArchives["auth-status"], authArchives["auth-password-start"], authArchives["auth-password-complete"], authArchives["auth-password-set"]} {
+	for _, path := range []string{archives["passkeyoptions"], archives["passkeycomplete"], challengeArchive, authArchives["auth-email-start"], authArchives["auth-email-complete"], authArchives["auth-passkey-start"], authArchives["auth-passkey-complete"], authArchives["auth-refresh"], authArchives["auth-status"], authArchives["auth-password-start"], authArchives["auth-password-complete"], authArchives["auth-password-set"]} {
 		if _, err := os.Stat(path); err != nil {
 			return nil, fmt.Errorf("build Lambda archives with scripts/build.sh or scripts/build.bat first: %s: %w", path, err)
 		}
@@ -78,14 +66,6 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 			return nil, err
 		}
 	}
-	proofSecret, err := secretsmanager.NewSecret(ctx, "email-proof-key", &secretsmanager.SecretArgs{Description: pulumi.String("Email proof HMAC key supplied by deployment configuration")})
-	if err != nil {
-		return nil, err
-	}
-	proofVersion, err := secretsmanager.NewSecretVersion(ctx, "email-proof-key-version", &secretsmanager.SecretVersionArgs{SecretId: proofSecret.ID(), SecretString: proofKey})
-	if err != nil {
-		return nil, err
-	}
 	region := aws.GetRegionOutput(ctx, aws.GetRegionOutputArgs{}).Name()
 	account := aws.GetCallerIdentityOutput(ctx, aws.GetCallerIdentityOutputArgs{}).AccountId()
 	table, err := dynamodb.NewTable(ctx, "email-proofs", &dynamodb.TableArgs{BillingMode: pulumi.String("PAY_PER_REQUEST"), HashKey: pulumi.String("id"), Attributes: dynamodb.TableAttributeArray{&dynamodb.TableAttributeArgs{Name: pulumi.String("id"), Type: pulumi.String("S")}}, Ttl: &dynamodb.TableTtlArgs{AttributeName: pulumi.String("ttl"), Enabled: pulumi.Bool(true)}, PointInTimeRecovery: &dynamodb.TablePointInTimeRecoveryArgs{Enabled: pulumi.Bool(true)}, ServerSideEncryption: &dynamodb.TableServerSideEncryptionArgs{Enabled: pulumi.Bool(true)}})
@@ -96,7 +76,7 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	if err != nil {
 		return nil, err
 	}
-	reset := &resetInventory{Control: control, Tables: pulumi.StringArray{table.Name}, TableARNs: pulumi.StringArray{table.Arn}}
+	reset := &ResetInventory{Control: control, Tables: pulumi.StringArray{table.Name}, TableARNs: pulumi.StringArray{table.Arn}}
 	sender, err := ses.NewDomainIdentity(ctx, "email-sender", &ses.DomainIdentityArgs{Domain: pulumi.String(senderDomain)})
 	if err != nil {
 		return nil, err
@@ -120,27 +100,13 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 		}
 	}
 	trust := pulumi.String(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}`)
-	roles := map[string]*iam.Role{}
-	for _, name := range []string{"signup", "resend", "confirm"} {
-		role, err := iam.NewRole(ctx, name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust})
-		if err != nil {
-			return nil, err
-		}
-		roles[name] = role
-	}
 	challengeRole, err := iam.NewRole(ctx, "challenge-role", &iam.RoleArgs{AssumeRolePolicy: trust})
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range []string{"signup", "resend", "confirm", "challenge"} {
-		role := challengeRole
-		if name != "challenge" {
-			role = roles[name]
-		}
-		_, err = iam.NewRolePolicyAttachment(ctx, name+"-logs", &iam.RolePolicyAttachmentArgs{Role: role.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")})
-		if err != nil {
-			return nil, err
-		}
+	_, err = iam.NewRolePolicyAttachment(ctx, "challenge-logs", &iam.RolePolicyAttachmentArgs{Role: challengeRole.Name, PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")})
+	if err != nil {
+		return nil, err
 	}
 	trigger, err := lambda.NewFunction(ctx, "cognito-grant-challenge", &lambda.FunctionArgs{Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")}, Role: challengeRole.Arn, Code: pulumi.NewFileArchive(challengeArchive), Timeout: pulumi.Int(10), Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"TABLE_NAME": table.Name}}})
 	if err != nil {
@@ -182,63 +148,9 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	if err != nil {
 		return nil, err
 	}
-	// SES also evaluates the verified recipient identity while in the sandbox.
-	// Allow identities in this account/region, but only with our configured From address.
-	sesIdentityScope := pulumi.Sprintf("arn:aws:ses:%s:%s:identity/*", region, account)
-	policies := map[string]pulumi.StringOutput{
-		"signup":  pulumi.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:PutItem","dynamodb:UpdateItem"],"Resource":%q},{"Effect":"Allow","Action":"cognito-idp:AdminGetUser","Resource":%q},{"Effect":"Allow","Action":"ses:SendEmail","Resource":%q,"Condition":{"StringEquals":{"ses:FromAddress":%q}}}]}`, table.Arn, pool.Arn, sesIdentityScope, senderAddress),
-		"resend":  pulumi.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:GetItem","dynamodb:PutItem","dynamodb:UpdateItem"],"Resource":%q},{"Effect":"Allow","Action":"cognito-idp:AdminGetUser","Resource":%q},{"Effect":"Allow","Action":"ses:SendEmail","Resource":%q,"Condition":{"StringEquals":{"ses:FromAddress":%q}}}]}`, table.Arn, pool.Arn, sesIdentityScope, senderAddress),
-		"confirm": pulumi.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:GetItem","dynamodb:PutItem","dynamodb:UpdateItem"],"Resource":%q},{"Effect":"Allow","Action":["cognito-idp:AdminGetUser","cognito-idp:AdminCreateUser","cognito-idp:AdminInitiateAuth","cognito-idp:AdminRespondToAuthChallenge"],"Resource":%q}]}`, table.Arn, pool.Arn),
-	}
-	for name, policy := range policies {
-		policies[name] = pulumi.All(policy, proofSecret.Arn).ApplyT(func(v []interface{}) (string, error) {
-			var doc map[string]interface{}
-			if err := json.Unmarshal([]byte(v[0].(string)), &doc); err != nil {
-				return "", err
-			}
-			doc["Statement"] = append(doc["Statement"].([]interface{}), map[string]interface{}{"Effect": "Allow", "Action": "secretsmanager:GetSecretValue", "Resource": v[1]})
-			b, e := json.Marshal(doc)
-			return string(b), e
-		}).(pulumi.StringOutput)
-	}
-	functions := map[string]*lambda.Function{}
-	for _, name := range []string{"signup", "resend", "confirm"} {
-		grant, err := iam.NewRolePolicy(ctx, name+"-permissions", &iam.RolePolicyArgs{Role: roles[name].ID(), Policy: policies[name]})
-		if err != nil {
-			return nil, err
-		}
-		fn, err := lambda.NewFunction(ctx, "email-"+name, &lambda.FunctionArgs{
-			Runtime: pulumi.String("provided.al2023"), Handler: pulumi.String("bootstrap"), Architectures: pulumi.StringArray{pulumi.String("arm64")},
-			Role: roles[name].Arn, Code: pulumi.NewFileArchive(archives[name]), Timeout: pulumi.Int(25), MemorySize: pulumi.Int(256),
-			Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{
-				"TABLE_NAME": table.Name, "POOL_ID": pool.ID(), "CLIENT_ID": client.ID(), "APP_ORIGIN": pulumi.String(origin),
-				"SENDER_ADDRESS": pulumi.String(senderAddress), "PROOF_KEY_SECRET_ARN": proofSecret.Arn, "PROOF_KEY_SECRET_VERSION": proofVersion.VersionId,
-				"DIAGNOSTIC_MODE": pulumi.String(fmt.Sprint(diagnosticMode)),
-			}},
-		}, pulumi.DependsOn([]pulumi.Resource{grant}))
-		if err != nil {
-			return nil, err
-		}
-		functions[name] = fn
-		reset.addFunction(fn)
-	}
 	httpAPI, err := apigatewayv2.NewApi(ctx, "email-http-api", &apigatewayv2.ApiArgs{ProtocolType: pulumi.String("HTTP"), CorsConfiguration: &apigatewayv2.ApiCorsConfigurationArgs{AllowOrigins: pulumi.StringArray{pulumi.String(origin)}, AllowMethods: pulumi.StringArray{pulumi.String("POST"), pulumi.String("GET")}, AllowHeaders: pulumi.StringArray{pulumi.String("content-type"), pulumi.String("authorization")}, MaxAge: pulumi.Int(300)}})
 	if err != nil {
 		return nil, err
-	}
-	for _, name := range []string{"signup", "resend", "confirm"} {
-		integration, err := apigatewayv2.NewIntegration(ctx, name+"-integration", &apigatewayv2.IntegrationArgs{ApiId: httpAPI.ID(), IntegrationType: pulumi.String("AWS_PROXY"), IntegrationUri: functions[name].InvokeArn, PayloadFormatVersion: pulumi.String("2.0")})
-		if err != nil {
-			return nil, err
-		}
-		_, err = apigatewayv2.NewRoute(ctx, "route-"+name, &apigatewayv2.RouteArgs{ApiId: httpAPI.ID(), RouteKey: pulumi.String("POST /" + name), Target: pulumi.Sprintf("integrations/%s", integration.ID())})
-		if err != nil {
-			return nil, err
-		}
-		_, err = lambda.NewPermission(ctx, "allow-"+name, &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: functions[name].Name, Principal: pulumi.String("apigateway.amazonaws.com"), SourceArn: pulumi.Sprintf("%s/*/POST/%s", httpAPI.ExecutionArn, name)})
-		if err != nil {
-			return nil, err
-		}
 	}
 	// Registration is authorized by Cognito with the caller's access token, not IAM.
 	// Keep each endpoint in a separate Lambda, as with email verification.
@@ -322,9 +234,14 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	if err = deployRuntime(ctx, cfg, opts, httpAPI); err != nil {
 		return nil, err
 	}
-	resetFn, err := deployReset(ctx, cfg, opts, reset)
-	if err != nil {
-		return nil, err
+	var resetFn *lambda.Function
+	resetName := pulumi.String(opts.ResetFunctionName).ToStringOutput()
+	if !opts.DeferReset {
+		resetFn, err = deployReset(ctx, cfg, opts, reset)
+		if err != nil {
+			return nil, err
+		}
+		resetName = resetFn.Name
 	}
 	stage, err := apigatewayv2.NewStage(ctx, "email-stage", &apigatewayv2.StageArgs{ApiId: httpAPI.ID(), Name: pulumi.String("$default"), AutoDeploy: pulumi.Bool(true), DefaultRouteSettings: &apigatewayv2.StageDefaultRouteSettingsArgs{ThrottlingBurstLimit: pulumi.Int(20), ThrottlingRateLimit: pulumi.Float64(10)}})
 	if err != nil {
@@ -352,7 +269,7 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	if domain := cfg.Get("apiDomain"); domain != "" {
 		apiURL = pulumi.String("https://" + domain).ToStringOutput()
 	}
-	return &Deployment{RuntimeTableName: opts.RuntimeTableName.ToStringOutput(), RuntimeTableARN: opts.RuntimeTableARN.ToStringOutput(), APIURL: apiURL, PoolID: pool.ID().ToStringOutput(), ClientID: client.ID().ToStringOutput(), Issuer: pulumi.Sprintf("https://cognito-idp.%s.amazonaws.com/%s", region, pool.ID()), ResetFunctionName: resetFn.Name, API: httpAPI, Stage: stage, ResetFunction: resetFn}, nil
+	return &Deployment{RuntimeTableName: opts.RuntimeTableName.ToStringOutput(), RuntimeTableARN: opts.RuntimeTableARN.ToStringOutput(), APIURL: apiURL, PoolID: pool.ID().ToStringOutput(), ClientID: client.ID().ToStringOutput(), Issuer: pulumi.Sprintf("https://cognito-idp.%s.amazonaws.com/%s", region, pool.ID()), ResetFunctionName: resetName, ResetInventory: reset, Integration: map[string]pulumi.StringOutput{"pool_id": pool.ID().ToStringOutput(), "pool_arn": pool.Arn, "client_id": client.ID().ToStringOutput(), "grants_table_name": table.Name, "grants_table_arn": table.Arn, "api_id": httpAPI.ID().ToStringOutput(), "api_execution_arn": httpAPI.ExecutionArn, "sender_identity_arn": sender.Arn, "region": region, "account_id": account}, API: httpAPI, Stage: stage, ResetFunction: resetFn}, nil
 }
 func validate(origin, domain, address string) error {
 	u, e := url.Parse(origin)

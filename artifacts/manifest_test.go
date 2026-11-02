@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-func TestManifestOwnsTwentyFeatureArchives(t *testing.T) {
+func TestManifestOwnsOwnedFeatureArchives(t *testing.T) {
 	entries := Lambdas()
-	if len(entries) != 20 {
-		t.Fatalf("expected20archives,got%d", len(entries))
+	if len(entries) != 17 {
+		t.Fatalf("expected17archives,got%d", len(entries))
 	}
 	seen := map[string]bool{}
 	signin := 0
@@ -38,5 +38,13 @@ func TestManifestOwnsTwentyFeatureArchives(t *testing.T) {
 	entries[0].Name = "mutated"
 	if Lambdas()[0].Name == "mutated" {
 		t.Fatal("manifestaliasesinternalstate")
+	}
+}
+
+func TestVerificationCommandsAreNotAuthenticationArtifacts(t *testing.T) {
+	for _, a := range Lambdas() {
+		if a.Name == "signup" || a.Name == "resend" || a.Name == "confirm" {
+			t.Fatalf("verification artifact still owned by auth: %s", a.Name)
+		}
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 )
 
-type resetInventory struct {
+type ResetInventory struct {
 	CaptureTable    pulumi.StringInput
 	CaptureTableARN pulumi.StringInput
 	Control         *dynamodb.Table
@@ -28,14 +28,14 @@ type resetInventory struct {
 	QueueARNs       pulumi.StringArray
 }
 
-func (i *resetInventory) addFunction(fn *lambda.Function) {
+func (i *ResetInventory) addFunction(fn *lambda.Function) {
 	i.Functions = append(i.Functions, fn.Name)
 	i.FunctionARNs = append(i.FunctionARNs, fn.Arn)
 }
 func resetControl(ctx *pulumi.Context) (*dynamodb.Table, error) {
 	return dynamodb.NewTable(ctx, "environment-reset-control", &dynamodb.TableArgs{BillingMode: pulumi.String("PAY_PER_REQUEST"), HashKey: pulumi.String("id"), Attributes: dynamodb.TableAttributeArray{&dynamodb.TableAttributeArgs{Name: pulumi.String("id"), Type: pulumi.String("S")}}, ServerSideEncryption: &dynamodb.TableServerSideEncryptionArgs{Enabled: pulumi.Bool(true)}, PointInTimeRecovery: &dynamodb.TablePointInTimeRecoveryArgs{Enabled: pulumi.Bool(true)}})
 }
-func deployReset(ctx *pulumi.Context, cfg Config, opts Options, i *resetInventory) (*lambda.Function, error) {
+func deployReset(ctx *pulumi.Context, cfg Config, opts Options, i *ResetInventory) (*lambda.Function, error) {
 	enabled := opts.Environment != "prod" && opts.Environment != "production" && cfg.Get("environmentClass") != "production"
 	if cfg.Get("environmentResetEnabled") != "" {
 		enabled = cfg.GetBool("environmentResetEnabled")
@@ -86,4 +86,13 @@ func deployReset(ctx *pulumi.Context, cfg Config, opts Options, i *resetInventor
 	_, e = lambda.NewPermission(ctx, "environment-reset-schedule", &lambda.PermissionArgs{Action: pulumi.String("lambda:InvokeFunction"), Function: fn.Name, Principal: pulumi.String("events.amazonaws.com"), SourceArn: rule.Arn})
 	ctx.Export("environmentResetEnabled", pulumi.Bool(enabled))
 	return fn, e
+}
+
+// FinalizeReset is called after the application has appended all feature-owned
+// tables and functions. The reset worker itself is never included as a target.
+func FinalizeReset(ctx *pulumi.Context, cfg Config, opts Options, i *ResetInventory) (*lambda.Function, error) {
+	if i == nil || i.Control == nil {
+		return nil, fmt.Errorf("reset inventory is required")
+	}
+	return deployReset(ctx, cfg, opts, i)
 }

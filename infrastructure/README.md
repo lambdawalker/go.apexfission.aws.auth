@@ -76,3 +76,7 @@ inside this native backend; Pulumi preserves and validates those dependencies.
 There are no global resource transformations or global mutable option hooks.
 
 After deployment, export `pulumi stack output runtimeDefaults --json > runtime-defaults.json`. From the feature root use `go run ./cmd/seed-runtime -table TABLE -environment ENV -defaults-file runtime-defaults.json`. The seed consumes the exported policy, including disabled capture; it never invents defaults or overwrites an existing policy.
+
+## Verification split
+
+This branch deploys authentication only (17 Lambda archives). Proof-key and signup/resend/confirm resources are supplied by the separate verification feature. Integration outputs are exposed in Deployment.Integration; application composition defers reset, appends verification resources and calls FinalizeReset. DeployStandalone does not include email verification.
