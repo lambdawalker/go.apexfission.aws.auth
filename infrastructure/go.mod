@@ -61,7 +61,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.7 // indirect
-	github.com/lambdawalker/go.infra.composer v0.0.0-20261102153221-3a792e04a1ec // indirect
+	github.com/lambdawalker/go.infra.composer v0.0.0-20261102194707-9c7f065ec12b // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
@@ -126,11 +126,11 @@ require (
 	lukechampine.com/frand v1.4.2 // indirect
 )
 
-replace github.com/lambdawalker/go.apexfission.aws.auth => ..
-
 require (
-	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261102001946-a78011cc27cf
-	github.com/lambdawalker/go.infra.composer/adapters/pulumi v0.0.0-20261102153343-f42f8e3ede1d
+	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261101213106-f4f560037d8d
+	github.com/lambdawalker/go.infra.composer/adapters/pulumi v0.0.0-20261102194734-25e4fbebbec0
 	github.com/pulumi/pulumi-aws/sdk/v7 v7.44.0
 	github.com/pulumi/pulumi/sdk/v3 v3.273.0
 )
+
+replace github.com/lambdawalker/go.apexfission.aws.auth => ..

@@ -87,6 +87,9 @@ func TestNativeDeploymentRetainsRuntimeAndSecretBindings(t *testing.T) {
 			t.Fatalf("verification ownership leaked: %s", r.Name)
 		}
 	}
+	if got := m.resources["cognito-grant-challenge"].Inputs["description"].StringValue(); got != "dev.example.com ISOLATED | go.apexfission.aws.auth" {
+		t.Fatal(got)
+	}
 	count := 0
 	for _, r := range m.resources {
 		if r.TypeToken != "aws:lambda/function:Function" {
