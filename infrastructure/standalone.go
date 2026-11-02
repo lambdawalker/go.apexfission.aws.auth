@@ -41,7 +41,7 @@ func DeployStandalone(ctx *pulumi.Context, cfg Config, opts Options) (*Deploymen
 	if err := Validate(cfg, checked); err != nil {
 		return nil, err
 	}
-	ctx, labels, err := awslabels.Ensure(ctx, opts.Environment, cfg.Get("appOrigin"), "authentication")
+	ctx, labels, err := awslabels.Ensure(ctx, opts.Environment, cfg.Get("appOrigin"), "authentication", "go.apexfission.aws.auth")
 	if err != nil {
 		return nil, err
 	}
