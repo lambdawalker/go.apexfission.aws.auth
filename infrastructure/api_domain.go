@@ -1,5 +1,7 @@
 package infrastructure
 
+import "github.com/lambdawalker/go.infra.composer/adapters/pulumi/awslabels"
+
 import (
 	"fmt"
 	"regexp"
@@ -23,14 +25,14 @@ func apiCertificate(ctx *pulumi.Context, domain, zone string) (*acm.Certificate,
 			return nil, fmt.Errorf("apiDomain must be a lowercase DNS hostname")
 		}
 	}
-	cert, err := acm.NewCertificate(ctx, "api-certificate", &acm.CertificateArgs{DomainName: pulumi.String(domain), ValidationMethod: pulumi.String("DNS")})
+	cert, err := acm.NewCertificate(ctx, "api-certificate", &acm.CertificateArgs{DomainName: pulumi.String(domain), ValidationMethod: pulumi.String("DNS")}, awslabels.Option(ctx))
 	if err != nil {
 		return nil, err
 	}
 	ctx.Export("apiCertificateArn", cert.Arn)
 	if zone != "" {
 		record := cert.DomainValidationOptions.Index(pulumi.Int(0))
-		_, err = route53.NewRecord(ctx, "api-certificate-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: record.ResourceRecordName().Elem(), Type: record.ResourceRecordType().Elem(), Records: pulumi.StringArray{record.ResourceRecordValue().Elem()}, Ttl: pulumi.Int(300)})
+		_, err = route53.NewRecord(ctx, "api-certificate-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: record.ResourceRecordName().Elem(), Type: record.ResourceRecordType().Elem(), Records: pulumi.StringArray{record.ResourceRecordValue().Elem()}, Ttl: pulumi.Int(300)}, awslabels.Option(ctx))
 	}
 	return cert, err
 }
@@ -40,15 +42,15 @@ func apiDomainMapping(ctx *pulumi.Context, domain, zone string, cert *acm.Certif
 		ctx.Export("apiUrl", api.ApiEndpoint)
 		return nil
 	}
-	validation, err := acm.NewCertificateValidation(ctx, "api-certificate-validation", &acm.CertificateValidationArgs{CertificateArn: cert.Arn})
+	validation, err := acm.NewCertificateValidation(ctx, "api-certificate-validation", &acm.CertificateValidationArgs{CertificateArn: cert.Arn}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	custom, err := apigatewayv2.NewDomainName(ctx, "api-domain", &apigatewayv2.DomainNameArgs{DomainName: pulumi.String(domain), DomainNameConfiguration: &apigatewayv2.DomainNameDomainNameConfigurationArgs{CertificateArn: validation.CertificateArn, EndpointType: pulumi.String("REGIONAL"), SecurityPolicy: pulumi.String("TLS_1_2")}})
+	custom, err := apigatewayv2.NewDomainName(ctx, "api-domain", &apigatewayv2.DomainNameArgs{DomainName: pulumi.String(domain), DomainNameConfiguration: &apigatewayv2.DomainNameDomainNameConfigurationArgs{CertificateArn: validation.CertificateArn, EndpointType: pulumi.String("REGIONAL"), SecurityPolicy: pulumi.String("TLS_1_2")}}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
-	_, err = apigatewayv2.NewApiMapping(ctx, "api-domain-mapping", &apigatewayv2.ApiMappingArgs{ApiId: api.ID(), DomainName: custom.ID(), Stage: stage.Name})
+	_, err = apigatewayv2.NewApiMapping(ctx, "api-domain-mapping", &apigatewayv2.ApiMappingArgs{ApiId: api.ID(), DomainName: custom.ID(), Stage: stage.Name}, awslabels.Option(ctx))
 	if err != nil {
 		return err
 	}
@@ -57,7 +59,7 @@ func apiDomainMapping(ctx *pulumi.Context, domain, zone string, cert *acm.Certif
 	ctx.Export("apiDomainTarget", target)
 	ctx.Export("apiUrl", pulumi.String("https://"+domain))
 	if zone != "" {
-		_, err = route53.NewRecord(ctx, "api-domain-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.String(domain), Type: pulumi.String("CNAME"), Records: pulumi.StringArray{target}, Ttl: pulumi.Int(300)})
+		_, err = route53.NewRecord(ctx, "api-domain-dns", &route53.RecordArgs{ZoneId: pulumi.String(zone), Name: pulumi.String(domain), Type: pulumi.String("CNAME"), Records: pulumi.StringArray{target}, Ttl: pulumi.Int(300)}, awslabels.Option(ctx))
 	}
 	return err
 }

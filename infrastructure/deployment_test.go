@@ -82,6 +82,10 @@ func TestNativeDeploymentRetainsRuntimeAndSecretBindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tags := m.resources["email-signup"].Inputs["tags"]
+	if !tags.IsObject() || tags.ObjectValue()["ic:feature"].StringValue() != "authentication" || tags.ObjectValue()["ic:environment"].StringValue() != "isolated" {
+		t.Fatal("main email verification Lambda is missing authentication ownership")
+	}
 	count := 0
 	for _, r := range m.resources {
 		if r.TypeToken != "aws:lambda/function:Function" {

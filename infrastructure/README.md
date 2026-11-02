@@ -76,3 +76,7 @@ inside this native backend; Pulumi preserves and validates those dependencies.
 There are no global resource transformations or global mutable option hooks.
 
 After deployment, export `pulumi stack output runtimeDefaults --json > runtime-defaults.json`. From the feature root use `go run ./cmd/seed-runtime -table TABLE -environment ENV -defaults-file runtime-defaults.json`. The seed consumes the exported policy, including disabled capture; it never invents defaults or overwrites an existing policy.
+
+## Ownership labels on main
+
+Native deployments use the merged infra.composer awslabels helpers and export resourceInventory with identifiers, coverage and parent references. Composed applications supply their scope; standalone deployments derive validated project/environment/origin defaults. Names and integrated email verification remain unchanged. Legacy SES resources are recorded as inventory-only, and immutable policy descriptions are preserved.
