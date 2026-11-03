@@ -7,3 +7,6 @@ go.work
 go.work.sum
 *.local
 __pycache__/
+
+/deployment-reports/
+/.cache/infra-composer/

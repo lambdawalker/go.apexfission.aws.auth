@@ -3,6 +3,14 @@ module github.com/lambdawalker/go.apexfission.aws.auth/infrastructure
 go 1.27.3
 
 require (
+	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261101213106-f4f560037d8d
+	github.com/lambdawalker/go.infra.composer v0.0.0-20261103142306-5d896c43edf3
+	github.com/lambdawalker/go.infra.composer/adapters/pulumi v0.0.0-20261103142306-5d896c43edf3
+	github.com/pulumi/pulumi-aws/sdk/v7 v7.44.0
+	github.com/pulumi/pulumi/sdk/v3 v3.273.0
+)
+
+require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.5.2 // indirect
@@ -62,7 +70,6 @@ require (
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/lambdawalker/go.appexfission.aws.card-capture v0.0.0-20261103032703-915eb97b7002 // indirect
-	github.com/lambdawalker/go.infra.composer v0.0.0-20261102194707-9c7f065ec12b // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
@@ -125,13 +132,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/frand v1.4.2 // indirect
-)
-
-require (
-	github.com/lambdawalker/go.apexfission.aws.auth v0.0.0-20261101213106-f4f560037d8d
-	github.com/lambdawalker/go.infra.composer/adapters/pulumi v0.0.0-20261102194734-25e4fbebbec0
-	github.com/pulumi/pulumi-aws/sdk/v7 v7.44.0
-	github.com/pulumi/pulumi/sdk/v3 v3.273.0
 )
 
 replace github.com/lambdawalker/go.apexfission.aws.auth => ..
