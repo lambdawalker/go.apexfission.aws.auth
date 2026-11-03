@@ -253,11 +253,14 @@ func (s Store) SyncDefaults(ctx context.Context, c Config, f Fence) error {
 	}
 	condition := "attribute_not_exists(id)"
 	var values map[string]types.AttributeValue
+	var names map[string]string
 	if old.SchemaVersion != 0 {
-		condition = "Revision = :revision AND (attribute_not_exists(Override) OR Override = :false) AND (attribute_not_exists(DefaultGeneration) OR DefaultGeneration < :generation)"
+		condition = "Revision = :revision AND (attribute_not_exists(#override) OR #override = :false) AND (attribute_not_exists(DefaultGeneration) OR DefaultGeneration < :generation)"
+		// Override is a DynamoDB reserved word; alias it without changing the stored schema.
+		names = map[string]string{"#override": "Override"}
 		values = map[string]types.AttributeValue{":revision": revision(old.Revision), ":false": &types.AttributeValueMemberBOOL{Value: false}, ":generation": revision(f.Revision)}
 	}
-	writes := []types.TransactWriteItem{{ConditionCheck: &types.ConditionCheck{TableName: aws.String(f.Table), Key: map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: f.Environment}}, ConditionExpression: aws.String("revision = :revision AND #lock = :token"), ExpressionAttributeNames: map[string]string{"#lock": "lock"}, ExpressionAttributeValues: map[string]types.AttributeValue{":revision": revision(f.Revision), ":token": &types.AttributeValueMemberS{Value: f.Token}}}}, {Put: &types.Put{TableName: aws.String(s.Table), Item: m, ConditionExpression: aws.String(condition), ExpressionAttributeValues: values}}}
+	writes := []types.TransactWriteItem{{ConditionCheck: &types.ConditionCheck{TableName: aws.String(f.Table), Key: map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: f.Environment}}, ConditionExpression: aws.String("revision = :revision AND #lock = :token"), ExpressionAttributeNames: map[string]string{"#lock": "lock"}, ExpressionAttributeValues: map[string]types.AttributeValue{":revision": revision(f.Revision), ":token": &types.AttributeValueMemberS{Value: f.Token}}}}, {Put: &types.Put{TableName: aws.String(s.Table), Item: m, ConditionExpression: aws.String(condition), ExpressionAttributeNames: names, ExpressionAttributeValues: values}}}
 	if changed {
 		v, e := item("ENV#"+c.Environment, "VERSION#"+fmtRevision(c.Revision), Version{Config: c, Actor: "deployment:" + strconv.FormatInt(f.Revision, 10), Action: "defaults"})
 		if e != nil {
