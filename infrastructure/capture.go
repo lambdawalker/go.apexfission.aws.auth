@@ -106,6 +106,12 @@ func deployCapture(ctx *pulumi.Context, cfg Config, opts Options, api *apigatewa
 		if e != nil {
 			return e
 		}
+		if name == "capture" || name == "capture-worker" {
+			_, e = iam.NewRolePolicy(ctx, name+"-dispatch-grant", &iam.RolePolicyArgs{Role: role.ID(), Policy: pulumi.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:SendMessage","Resource":%q}]}`, queue.Arn)}, awslabels.Option(ctx))
+			if e != nil {
+				return e
+			}
+		}
 		grant, e := iam.NewRolePolicy(ctx, name+"-grant", &iam.RolePolicyArgs{Role: role.ID(), Policy: policies[name]}, awslabels.Option(ctx))
 		if e != nil {
 			return e
