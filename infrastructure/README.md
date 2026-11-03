@@ -7,7 +7,7 @@ Pulumi. No application code or stack credentials are imported here.
 Use `Deploy(ctx, cfg, Options)` with a Pulumi `*config.Config` or an implementation
 of `Config`. The supported configuration mechanism is this explicit reader; the
 package does not discover remote configuration services or load config at import
-time. `Validate(cfg, opts)` checks configuration and all 20 Lambda archives before
+time. `Validate(cfg, opts)` checks configuration and all 14 Lambda archives before
 any native resource constructors. `Deploy` calls it automatically.
 
 ```go
@@ -58,8 +58,7 @@ overwritten. Until seeded, runtime policy readers fail closed. An external table
 must already contain the policy or be seeded by its owner.
 
 Optional legacy settings for API domain, Route53 zone, Android associations,
-capture, concurrency and reset policy retain their behavior. Production capture
-requires the quota-checked concurrency override used by the deployment tool.
+and reset policy retain their behavior. Capture resources, concurrency and quota checks belong to the separate card feature.
 Archives are obtained directly from the root `artifacts.Lambdas()` manifest.
 No stack configs or deployment credentials are distributed in this module.
 
@@ -79,8 +78,14 @@ After deployment, export `pulumi stack output runtimeDefaults --json > runtime-d
 
 ## Verification split
 
-Deploys authentication only (17 Lambda archives). Proof-key and signup/resend/confirm resources are supplied by the separate verification feature. Integration outputs are exposed in Deployment.Integration; application composition defers reset, appends verification resources and calls FinalizeReset. DeployStandalone does not include email verification.
+Deploys authentication only (14 Lambda archives). Proof-key and signup/resend/confirm resources are supplied by the separate verification feature. Integration outputs are exposed in Deployment.Integration; application composition defers reset, appends verification resources and calls FinalizeReset. DeployStandalone does not include email verification.
 
 ## Ownership labels
 
 Native resources receive the seven canonical `ic:` tags where their provider schema supports tags, with `domain ENV | go.apexfission.aws.auth` descriptions on mutable fields. No physical identifiers change. `resourceInventory` lists every registered AWS resource, including unsupported tagging cases and child identifiers. The application supplies per-feature scopes; standalone adapters derive validated project/environment/origin defaults. Use `ownershipDomain` in the application stack to override the hostname label; shared control-plane resources use environment `shared`. Legacy SES adapter resources remain explicitly inventory-only.
+
+## Capture integration
+
+`Options.CaptureTableName` and `CaptureTableARN` accept optional deferred inputs together. Auth-status reads this externally owned table with prefix-scoped `dynamodb:GetItem` only. The password endpoint has no capture-table access. Without those inputs, no capture-table environment value or IAM grant is emitted, deployment defaults disable capture, and enrollment status safely reads auth-owned facts.
+
+`Deployment.CaptureIntegration` exposes `api_id`, `api_execution_arn`, `pool_id`, `client_id`, `issuer`, `region`, `reset_table_name`, and `reset_table_arn` for the card backend. The capture facts table is provisioned before auth and the card backend after auth. Auth creates neither card resources nor card routes and does not add injected resources to its `ResetInventory`. Applications combine inventories explicitly before finalizing reset. Validation requires only the 14 auth archives; card preflight owns its three archives and capacity checks.

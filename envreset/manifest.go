@@ -8,7 +8,10 @@ import (
 // ParseManifest validates the deployment-owned inventory, never dashboard input.
 func ParseManifest(data []byte, controlTable string) (Manifest, error) {
 	var m Manifest
-	if json.Unmarshal(data, &m) != nil || len(m.Functions) == 0 || len(m.Tables) < 2 || m.Pool == "" || m.Bucket == "" || len(m.Queues) < 2 || controlTable == "" {
+	if json.Unmarshal(data, &m) != nil || len(m.Functions) == 0 || len(m.Tables) == 0 || strings.TrimSpace(m.Pool) == "" || controlTable == "" {
+		return Manifest{}, ErrInvalid
+	}
+	if m.Bucket != "" && strings.TrimSpace(m.Bucket) == "" {
 		return Manifest{}, ErrInvalid
 	}
 	for _, items := range [][]string{m.Functions, m.Tables, m.Queues} {

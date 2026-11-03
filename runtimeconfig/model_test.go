@@ -2,7 +2,7 @@ package runtimeconfig
 
 import (
 	"context"
-	"github.com/lambdawalker/go.apexfission.aws.auth/capture"
+	capture "github.com/lambdawalker/go.appexfission.aws.card-capture/contracts"
 	"strings"
 	"testing"
 	"time"

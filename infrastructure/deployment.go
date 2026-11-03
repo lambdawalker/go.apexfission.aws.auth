@@ -29,9 +29,12 @@ type Config interface {
 }
 
 type Options struct {
-	ArtifactDir       string
-	RuntimeTableName  pulumi.StringInput
-	RuntimeTableARN   pulumi.StringInput
+	ArtifactDir      string
+	RuntimeTableName pulumi.StringInput
+	RuntimeTableARN  pulumi.StringInput
+	// CaptureTableName and CaptureTableARN optionally bind independently owned, read-only facts.
+	CaptureTableName  pulumi.StringInput
+	CaptureTableARN   pulumi.StringInput
 	Environment       string
 	ResetFunctionName string
 	// DeferReset lets the application finalize a reset manifest after composing all features.
@@ -39,10 +42,11 @@ type Options struct {
 }
 
 type Deployment struct {
-	Integration      map[string]pulumi.StringOutput
-	ResetInventory   *ResetInventory
-	RuntimeTableName pulumi.StringOutput
-	RuntimeTableARN  pulumi.StringOutput
+	Integration        map[string]pulumi.StringOutput
+	CaptureIntegration map[string]pulumi.StringOutput
+	ResetInventory     *ResetInventory
+	RuntimeTableName   pulumi.StringOutput
+	RuntimeTableARN    pulumi.StringOutput
 	// RuntimeTable is non-nil only when DeployStandalone creates the isolated table.
 	RuntimeTable      *dynamodb.Table
 	APIURL            pulumi.StringOutput
@@ -71,6 +75,14 @@ func Validate(cfg Config, opts Options) error {
 		return fmt.Errorf("RuntimeTableName and RuntimeTableARN bindings are required; supply the shared runtime table outputs through infrastructure.Options")
 	}
 	for key, value := range map[string]pulumi.StringInput{"RuntimeTableName": opts.RuntimeTableName, "RuntimeTableARN": opts.RuntimeTableARN} {
+		if v, ok := value.(pulumi.String); ok && strings.TrimSpace(string(v)) == "" {
+			return fmt.Errorf("%s binding must not be empty", key)
+		}
+	}
+	if (opts.CaptureTableName == nil) != (opts.CaptureTableARN == nil) {
+		return fmt.Errorf("CaptureTableName and CaptureTableARN must be supplied together")
+	}
+	for key, value := range map[string]pulumi.StringInput{"CaptureTableName": opts.CaptureTableName, "CaptureTableARN": opts.CaptureTableARN} {
 		if v, ok := value.(pulumi.String); ok && strings.TrimSpace(string(v)) == "" {
 			return fmt.Errorf("%s binding must not be empty", key)
 		}
@@ -109,9 +121,6 @@ func Validate(cfg Config, opts Options) error {
 			return fmt.Errorf("asset links require an HTTPS appOrigin hostname")
 		}
 	}
-	if _, err := captureCapacity(cfg, opts.Environment); err != nil {
-		return err
-	}
 	for _, name := range []string{"environmentResetEnabled", "captureEnabled", "diagnosticMode"} {
 		if v := cfg.Get(name); v != "" {
 			if _, err := strconv.ParseBool(v); err != nil {
@@ -119,7 +128,7 @@ func Validate(cfg Config, opts Options) error {
 			}
 		}
 	}
-	defaults := deploymentRuntimeDefaults(opts.Environment, cfg.Get("captureEnabled"))
+	defaults := deploymentRuntimeDefaults(opts.Environment, captureSetting(cfg, opts))
 	if err := defaults.Validate(); err != nil {
 		return err
 	}

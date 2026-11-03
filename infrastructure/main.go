@@ -191,9 +191,6 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 			return nil, e
 		}
 	}
-	if err = deployCapture(ctx, cfg, opts, httpAPI, pool, client, region, reset); err != nil {
-		return nil, err
-	}
 	for _, spec := range []struct{ name, path string }{{"auth-email-start", "email/start"}, {"auth-email-complete", "email/complete"}, {"auth-passkey-start", "passkey/start"}, {"auth-passkey-complete", "passkey/complete"}, {"auth-refresh", "refresh"}, {"auth-status", "status"}, {"auth-password-start", "password/start"}, {"auth-password-complete", "password/complete"}, {"auth-password-set", "password/set"}} {
 		role, e := iam.NewRole(ctx, spec.name+"-role", &iam.RoleArgs{AssumeRolePolicy: trust}, awslabels.Option(ctx))
 		if e != nil {
@@ -211,10 +208,14 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 			variables["ENVIRONMENT"] = pulumi.String(opts.Environment)
 			variables["RUNTIME_TABLE"] = opts.RuntimeTableName
 			variables["TABLE_NAME"] = table.Name
-			if spec.path == "status" {
-				variables["CAPTURE_TABLE"] = reset.CaptureTable
+			if spec.path == "status" && opts.CaptureTableName != nil {
+				variables["CAPTURE_TABLE"] = opts.CaptureTableName
 			}
-			policy := pulumi.All(table.Arn, reset.CaptureTableARN, pool.Arn, opts.RuntimeTableARN).ApplyT(func(v []interface{}) string {
+			captureARN := pulumi.String("").ToStringOutput()
+			if opts.CaptureTableARN != nil {
+				captureARN = opts.CaptureTableARN.ToStringOutput()
+			}
+			policy := pulumi.All(table.Arn, captureARN, pool.Arn, opts.RuntimeTableARN).ApplyT(func(v []interface{}) string {
 				return enrollmentPolicy(spec.path, opts.Environment, v[3].(string), v[0].(string), v[1].(string), v[2].(string))
 			}).(pulumi.StringOutput)
 			grant, e := iam.NewRolePolicy(ctx, spec.name+"-enrollment", &iam.RolePolicyArgs{Role: role.Name, Policy: policy}, awslabels.Option(ctx))
@@ -260,7 +261,7 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	if indexURL := cfg.Get("indexUrl"); indexURL != "" {
 		ctx.Export("indexUrl", pulumi.String(indexURL))
 	}
-	defaults := deploymentRuntimeDefaults(opts.Environment, cfg.Get("captureEnabled"))
+	defaults := deploymentRuntimeDefaults(opts.Environment, captureSetting(cfg, opts))
 	// New defaults use generic localized disclosure; admin overrides remain revisioned.
 	defaults.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if e := defaults.Validate(); e != nil {
@@ -279,7 +280,7 @@ func deploy(ctx *pulumi.Context, cfg Config, opts Options) (*Deployment, error) 
 	if domain := cfg.Get("apiDomain"); domain != "" {
 		apiURL = pulumi.String("https://" + domain).ToStringOutput()
 	}
-	return &Deployment{RuntimeTableName: opts.RuntimeTableName.ToStringOutput(), RuntimeTableARN: opts.RuntimeTableARN.ToStringOutput(), APIURL: apiURL, PoolID: pool.ID().ToStringOutput(), ClientID: client.ID().ToStringOutput(), Issuer: pulumi.Sprintf("https://cognito-idp.%s.amazonaws.com/%s", region, pool.ID()), ResetFunctionName: resetName, ResetInventory: reset, Integration: map[string]pulumi.StringOutput{"pool_id": pool.ID().ToStringOutput(), "pool_arn": pool.Arn, "client_id": client.ID().ToStringOutput(), "grants_table_name": table.Name, "grants_table_arn": table.Arn, "api_id": httpAPI.ID().ToStringOutput(), "api_execution_arn": httpAPI.ExecutionArn, "sender_identity_arn": sender.Arn, "region": region, "account_id": account}, API: httpAPI, Stage: stage, ResetFunction: resetFn}, nil
+	return &Deployment{CaptureIntegration: map[string]pulumi.StringOutput{"api_id": httpAPI.ID().ToStringOutput(), "api_execution_arn": httpAPI.ExecutionArn, "pool_id": pool.ID().ToStringOutput(), "client_id": client.ID().ToStringOutput(), "issuer": pulumi.Sprintf("https://cognito-idp.%s.amazonaws.com/%s", region, pool.ID()), "region": region, "reset_table_name": control.Name, "reset_table_arn": control.Arn}, RuntimeTableName: opts.RuntimeTableName.ToStringOutput(), RuntimeTableARN: opts.RuntimeTableARN.ToStringOutput(), APIURL: apiURL, PoolID: pool.ID().ToStringOutput(), ClientID: client.ID().ToStringOutput(), Issuer: pulumi.Sprintf("https://cognito-idp.%s.amazonaws.com/%s", region, pool.ID()), ResetFunctionName: resetName, ResetInventory: reset, Integration: map[string]pulumi.StringOutput{"pool_id": pool.ID().ToStringOutput(), "pool_arn": pool.Arn, "client_id": client.ID().ToStringOutput(), "grants_table_name": table.Name, "grants_table_arn": table.Arn, "api_id": httpAPI.ID().ToStringOutput(), "api_execution_arn": httpAPI.ExecutionArn, "sender_identity_arn": sender.Arn, "region": region, "account_id": account}, API: httpAPI, Stage: stage, ResetFunction: resetFn}, nil
 }
 func validate(origin, domain, address string) error {
 	u, e := url.Parse(origin)

@@ -9,7 +9,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	cognito "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
-	"github.com/lambdawalker/go.apexfission.aws.auth/capture"
 	"github.com/lambdawalker/go.apexfission.aws.auth/runtimeconfig"
 )
 
@@ -29,9 +28,19 @@ type EnrollmentStore interface {
 	Get(context.Context, string) (EnrollmentFacts, error)
 	Mark(context.Context, string, bool, bool) error
 }
+
+// Capture facts are read-only projections owned by authentication.
+var ErrCaptureNotFound = errors.New("capture_not_found")
+
+type CaptureAccount struct {
+	IDCaptured bool
+	CurrentID  string
+}
+type CaptureRecord struct{ State string }
+
 type CaptureReader interface {
-	Account(context.Context, string) (capture.Account, error)
-	Get(context.Context, string, string) (capture.Record, error)
+	Account(context.Context, string) (CaptureAccount, error)
+	Get(context.Context, string, string) (CaptureRecord, error)
 }
 type Enrollment struct {
 	Identity                              EnrollmentIdentity
@@ -154,7 +163,7 @@ func (s Enrollment) Status(ctx context.Context, token string) (AccountStatus, er
 	}
 	if !facts.IDCaptured && s.Captures != nil {
 		account, e := s.Captures.Account(ctx, subject)
-		if e != nil && !errors.Is(e, capture.ErrNotFound) {
+		if e != nil && !errors.Is(e, ErrCaptureNotFound) {
 			return AccountStatus{}, ErrUnavailable
 		}
 		if e == nil && account.IDCaptured {
@@ -165,7 +174,7 @@ func (s Enrollment) Status(ctx context.Context, token string) (AccountStatus, er
 		}
 		if e == nil && !facts.IDCaptured && account.CurrentID != "" {
 			record, e := s.Captures.Get(ctx, subject, account.CurrentID)
-			if e != nil && !errors.Is(e, capture.ErrNotFound) {
+			if e != nil && !errors.Is(e, ErrCaptureNotFound) {
 				return AccountStatus{}, ErrUnavailable
 			}
 			if e == nil && record.State == "ready" {
