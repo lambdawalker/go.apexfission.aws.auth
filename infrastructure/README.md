@@ -89,3 +89,13 @@ Native resources receive the seven canonical `ic:` tags where their provider sch
 `Options.CaptureTableName` and `CaptureTableARN` accept optional deferred inputs together. Auth-status reads this externally owned table with prefix-scoped `dynamodb:GetItem` only. The password endpoint has no capture-table access. Without those inputs, no capture-table environment value or IAM grant is emitted, deployment defaults disable capture, and enrollment status safely reads auth-owned facts.
 
 `Deployment.CaptureIntegration` exposes `api_id`, `api_execution_arn`, `pool_id`, `client_id`, `issuer`, `region`, `reset_table_name`, and `reset_table_arn` for the card backend. The capture facts table is provisioned before auth and the card backend after auth. Auth creates neither card resources nor card routes and does not add injected resources to its `ResetInventory`. Applications combine inventories explicitly before finalizing reset. Validation requires only the 14 auth archives; card preflight owns its three archives and capacity checks.
+
+## Offline artifact preview
+
+From the repository root run `./preview.sh` or `.\preview.bat`. No AWS credentials, built archives or deployment are needed. Outputs default to repository-root `deployment-reports/preview/report.{md,json,html}`. Direct `go run ./cmd/preview` from infrastructure uses that process working directory instead.
+
+Flags: `-environment preview`, `-config nonsecret.json` (JSON string map), `-output-dir DIR`. Native optional settings use their existing config names; auth additionally accepts `"suppliedRuntime":"true"`. Defaults are illustrative `https://app.example.test`, `example.test`, and `verify@example.test`. Host bindings are external fixtures.
+
+To read an explicitly selected cached app report use `-cache FILE -project PROJECT -account ACCOUNT -backend BACKEND` with the matching environment; optional `-application`, `-region`, `-stack` further constrain identity. Unique exact feature/type/logical-name matches preserve physical identity and original evidence timestamps. Unknown and ambiguous evidence stays unknown. Cache does not perform a live check. The full selected source scope appears in the report; account identity is caller supplied.
+
+Checked-in `docs/artifacts/` samples are deterministic illustrative defaults, with unknown presence and no deployed IDs.
