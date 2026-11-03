@@ -23,6 +23,7 @@ func New(ctx context.Context) (capture.Service, *Store, *Transport, error) {
 	}
 	store := &Store{DB: dynamodb.NewFromConfig(cfg), Table: table}
 	transport := &Transport{Config: cfg, Bucket: bucket, QueueURL: os.Getenv("CAPTURE_QUEUE_URL")}
+	store.Send = transport.Send
 	s := capture.Service{Store: store, Objects: transport, Enabled: os.Getenv("CAPTURE_ENABLED") == "true", DocumentType: os.Getenv("CAPTURE_DOCUMENT_TYPE"), Purpose: os.Getenv("CAPTURE_PURPOSE"), Jurisdiction: os.Getenv("CAPTURE_JURISDICTION"), Retention: 7 * 24 * time.Hour}
 	s.Extractor = BedrockExtractor{Transport: transport}
 	runtimeTable, environment := os.Getenv("RUNTIME_TABLE"), os.Getenv("ENVIRONMENT")
