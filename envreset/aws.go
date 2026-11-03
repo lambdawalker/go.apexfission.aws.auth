@@ -164,6 +164,9 @@ func (b AWSBackend) Clear(ctx context.Context, kind string) (bool, error) {
 	return false, ErrInvalid
 }
 func (b AWSBackend) clearObjects(ctx context.Context) (bool, error) {
+	if b.Manifest.Bucket == "" {
+		return true, nil
+	}
 	target := url.URL{Scheme: "https", Host: b.Manifest.Bucket + ".s3." + b.HTTP.Config.Region + ".amazonaws.com", Path: "/", RawQuery: url.Values{"versions": {""}, "max-keys": {"25"}}.Encode()}
 	status, data, e := b.HTTP.Do(ctx, "s3", "GET", target.String(), nil, nil)
 	if e != nil || status != 200 {

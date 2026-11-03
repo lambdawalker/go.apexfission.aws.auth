@@ -4,13 +4,18 @@ package envreset
 import (
 	"context"
 	"errors"
-	"github.com/lambdawalker/go.apexfission.aws.auth/capture"
+	"regexp"
 	"time"
 )
 
 var ErrInvalid = errors.New("invalid_reset_request")
 var ErrDisabled = errors.New("reset_disabled")
 var ErrConflict = errors.New("reset_in_progress")
+
+var operationPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,80}$`)
+
+// ValidOperation validates a reset request idempotency key.
+func ValidOperation(value string) bool { return operationPattern.MatchString(value) }
 
 type Request struct {
 	Action       string `json:"action"`
@@ -70,7 +75,7 @@ func (s Service) Start(ctx context.Context, q Request) (Status, error) {
 	if !s.Enabled {
 		return Status{}, ErrDisabled
 	}
-	if q.Environment != s.Environment || q.Confirmation != s.Environment || !capture.ValidOperation(q.Operation) || q.Actor == "" || len(q.Actor) > 128 {
+	if q.Environment != s.Environment || q.Confirmation != s.Environment || !ValidOperation(q.Operation) || q.Actor == "" || len(q.Actor) > 128 {
 		return Status{}, ErrInvalid
 	}
 	r, e := s.Store.Load(ctx)

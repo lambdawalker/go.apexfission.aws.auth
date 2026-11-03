@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/lambdawalker/go.apexfission.aws.auth/capture"
+	capture "github.com/lambdawalker/go.appexfission.aws.card-capture/contracts"
 )
 
 var ErrInvalid = errors.New("invalid_config")

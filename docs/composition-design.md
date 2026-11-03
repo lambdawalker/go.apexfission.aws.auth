@@ -2,7 +2,7 @@
 
 Source baseline: go.attestra.aws.auth at 4607807ab0346f4a38532982889fe2e56954412e. Application owner: go.attestra.aws. Composer: go.infra.composer at 2628bc245bc6cbbef00f9fdbfcdd8c0ffab637e1.
 
-The authentication repository owns existing email proof, passkey/sign-in, capture/extraction, onboarding-policy, auth-only reset runtime packages and their Lambda entry points. The application owns admin/index UI, shared registry/runtime infrastructure, setup/deployment credentials, environment policy, CI and discovery publication. Runtime config schema/store stays with the auth feature; application-owned administration consumes that contract. No feature imports the application.
+The authentication repository owns passkey/sign-in, onboarding-policy, auth-only reset runtime packages and their Lambda entry points. The application owns admin/index UI, shared registry/runtime infrastructure, setup/deployment credentials, environment policy, CI and discovery publication. Runtime config schema/store stays with the auth feature; application-owned administration consumes that contract. No feature imports the application.
 
 Approach: extract existing runtime behavior and native Pulumi infrastructure into reusable Go packages, then compose the feature through the new composer. Avoid reimplementing AWS behavior from scratch or keeping an application-local copy of authentication runtime. The legacy repository remains operational; new deployments use distinct application project/state identities and reviewed targets. No live state transfer, resource deletion, credential migration or cloud deployment is authorized here.
 
@@ -27,7 +27,7 @@ The integrated application does not deploy a feature-owned panel. The original a
 
 Native infrastructure takes caller-supplied artifact directory, configuration reader, runtime table StringInputs and optional reset-function name/environment options; it returns typed API/pool/client/issuer/reset outputs. It must validate all required settings and artifact existence before registering resources. Standalone and integrated paths call the same implementation. Do not load configuration or register resources at package import/declaration time.
 
-Artifact manifest lists all 20 feature Lambda archive names and Go command package paths (nine auth routes share cmd/signin). Application builds these pinned module commands plus its own admin/index binaries. No command may require a sibling clone. New app project names are `attestra-application` and `attestra-control-plane`; do not automatically select old projects/state. A new reset-function prefix must avoid legacy collisions and be shared by admin invocation and native deployment.
+Artifact manifest lists all 14 authentication Lambda archive names and Go command package paths (nine auth routes share cmd/signin). Application builds these pinned module commands plus its own admin/index binaries. No command may require a sibling clone. New app project names are `attestra-application` and `attestra-control-plane`; do not automatically select old projects/state. A new reset-function prefix must avoid legacy collisions and be shared by admin invocation and native deployment.
 
 Proof-key material remains unchanged during extraction. New infrastructure stores the supplied Pulumi secret in AWS Secrets Manager and passes only its ARN/version to email Lambdas. A feature cold-start reader retrieves and validates the key once per execution environment; no per-invocation network read. Exact secret-scoped IAM is provisioned. Legacy plaintext PROOF_KEY is not a silent fallback. Rotation, outstanding proof validity and old/new consumers require a separate reviewed migration; this refactor does not generate or rotate keys implicitly.
 
@@ -38,3 +38,11 @@ Preserve existing runtime tests. Add failing tests for import separation, manife
 ## Two-feature branch
 
 Email verification implementation and resources are extracted to go.apexfission.aws.verifyemail. Authentication retains the existing email-proofs logical table for grants/enrollment (legacy name); verification owns the new verification-proofs table. The application injects identity.email-enrollment/v1 and combines reset inventories. This branch is designed for integration testing; no live resource adoption is automatic.
+
+## Independent card capture feature
+
+`github.com/lambdawalker/go.appexfission.aws.card-capture` owns capture API/service/worker/dispatch runtime, storage, queues, bucket, extraction and three Lambda artifacts. The authentication feature imports only its pure standard-library `contracts` package; runtime policy JSON, disclosure translations and policy version hashing remain compatible.
+
+`DeclareWithCapture` adds the `capture_facts` requirement (`capture.facts/v1`, table name/ARN), passed as deferred native `Options.CaptureTableName`/`CaptureTableARN`. Capture storage precedes auth; the capture backend follows auth and consumes the `capture_integration` offering (`identity.card-capture/v1`: API ID/execution ARN, pool/client/issuer/region and reset control table name/ARN). `Declare` and `DeployStandalone` still support independent authentication. Capture policy defaults are disabled without a bound facts table; missing facts never fabricate capture completion.
+
+The auth-owned read adapter exposes minimal enrollment DTOs, uses DynamoDB consistent GetItem reads of `ACCOUNT#sha256(owner)` and `CAP#sha256(owner)#id`, and rejects mismatched owners. IAM restricts capture-table access to GetItem and those key prefixes for auth-status only. Capture mutation/storage lifecycle code stays in the card module. Authentication reset inventory does not claim injected capture resources; the application combines all inventories when finalizing reset. Native auth validation checks only 14 auth archives and does not read card concurrency/quota settings.

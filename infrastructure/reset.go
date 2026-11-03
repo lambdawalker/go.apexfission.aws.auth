@@ -58,9 +58,16 @@ func deployReset(ctx *pulumi.Context, cfg Config, opts Options, i *ResetInventor
 			statement([]string{"lambda:GetFunctionConcurrency", "lambda:PutFunctionConcurrency", "lambda:DeleteFunctionConcurrency"}, v[0]),
 			statement([]string{"dynamodb:Scan", "dynamodb:BatchWriteItem"}, v[1]),
 			statement([]string{"cognito-idp:DescribeUserPool", "cognito-idp:ListUsers", "cognito-idp:AdminDeleteUser"}, v[2]),
-			statement("s3:ListBucketVersions", v[3]), statement("s3:DeleteObjectVersion", fmt.Sprint(v[3])+"/*"),
-			statement("sqs:PurgeQueue", v[4]), statement([]string{"dynamodb:GetItem", "dynamodb:PutItem"}, v[5]),
+			statement([]string{"dynamodb:GetItem", "dynamodb:PutItem"}, v[5]),
 		}}
+		statements := out["Statement"].([]any)
+		if i.BucketARN != nil {
+			statements = append(statements, statement("s3:ListBucketVersions", v[3]), statement("s3:DeleteObjectVersion", fmt.Sprint(v[3])+"/*"))
+		}
+		if len(i.QueueARNs) > 0 {
+			statements = append(statements, statement("sqs:PurgeQueue", v[4]))
+		}
+		out["Statement"] = statements
 		b, e := json.Marshal(out)
 		return string(b), e
 	}).(pulumi.StringOutput)

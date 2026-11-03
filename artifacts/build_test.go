@@ -38,14 +38,14 @@ func TestBuildGroupsManifestAndPackagesExecutableBootstrap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(counts) != 9 || counts[Module+"/cmd/signin"] != 1 {
+	if len(counts) != 6 || counts[Module+"/cmd/signin"] != 1 {
 		t.Fatalf("manifest builds not deduplicated: %v", counts)
 	}
 	files, err := os.ReadDir(out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 17 {
+	if len(files) != 14 {
 		t.Fatalf("got %d archives", len(files))
 	}
 	for _, lambda := range Lambdas() {

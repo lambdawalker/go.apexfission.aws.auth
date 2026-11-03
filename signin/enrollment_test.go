@@ -7,7 +7,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	cognito "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
-	"github.com/lambdawalker/go.apexfission.aws.auth/capture"
 	"github.com/lambdawalker/go.apexfission.aws.auth/runtimeconfig"
 	"testing"
 )
@@ -63,15 +62,15 @@ type captureReader struct {
 	completed bool
 }
 
-func (c captureReader) Account(context.Context, string) (capture.Account, error) {
-	return capture.Account{CurrentID: "capture", IDCaptured: c.completed}, nil
+func (c captureReader) Account(context.Context, string) (CaptureAccount, error) {
+	return CaptureAccount{CurrentID: "capture", IDCaptured: c.completed}, nil
 }
-func (c captureReader) Get(context.Context, string, string) (capture.Record, error) {
+func (c captureReader) Get(context.Context, string, string) (CaptureRecord, error) {
 	state := "uploading"
 	if c.ready {
 		state = "ready"
 	}
-	return capture.Record{State: state}, nil
+	return CaptureRecord{State: state}, nil
 }
 func testAccess(claims string) string {
 	return "header." + base64.RawURLEncoding.EncodeToString([]byte(claims)) + ".signature"

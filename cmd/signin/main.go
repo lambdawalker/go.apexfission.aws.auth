@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/lambdawalker/go.apexfission.aws.auth/awscapture"
 	"github.com/lambdawalker/go.apexfission.aws.auth/runtimeconfig"
 	"github.com/lambdawalker/go.apexfission.aws.auth/signin"
 )
@@ -30,8 +29,8 @@ func main() {
 		if enrollment.Environment == "" || enrollment.PoolID == "" || enrollment.Issuer == "" || os.Getenv("RUNTIME_TABLE") == "" || os.Getenv("TABLE_NAME") == "" {
 			log.Fatal("missing enrollment config")
 		}
-		if route == "status" {
-			enrollment.Captures = &awscapture.Store{DB: db, Table: os.Getenv("CAPTURE_TABLE")}
+		if route == "status" && os.Getenv("CAPTURE_TABLE") != "" {
+			enrollment.Captures = signin.CaptureFactStore{DB: db, Table: os.Getenv("CAPTURE_TABLE")}
 		}
 		h.Enrollment = enrollment
 	}

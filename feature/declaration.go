@@ -7,9 +7,22 @@ import (
 )
 
 const (
-	Kind               = "apexfission:auth:Backend"
-	RuntimeRequirement = "runtime_configuration"
+	Kind                    = "apexfission:auth:Backend"
+	RuntimeRequirement      = "runtime_configuration"
+	CaptureFactsRequirement = "capture_facts"
 )
+
+// CaptureFactsContract describes the independently owned read-only enrollment store.
+func CaptureFactsContract() composer.Contract {
+	return composer.Contract{ID: "capture.facts", Major: 1, Fields: map[string]composer.Field{"table_name": {Type: composer.String}, "table_arn": {Type: composer.String}}}
+}
+func CaptureIntegrationContract() composer.Contract {
+	fields := map[string]composer.Field{}
+	for _, k := range []string{"api_id", "api_execution_arn", "pool_id", "client_id", "issuer", "region", "reset_table_name", "reset_table_arn"} {
+		fields[k] = composer.Field{Type: composer.String}
+	}
+	return composer.Contract{ID: "identity.card-capture", Major: 1, Fields: fields}
+}
 
 func RuntimeContract() composer.Contract {
 	return composer.Contract{ID: "auth.runtime-policy", Major: 1, Fields: map[string]composer.Field{"table_name": {Type: composer.String}, "table_arn": {Type: composer.String}}}
@@ -39,15 +52,31 @@ func Declare(id string) *composer.Feature {
 	for k, f := range EmailIntegrationContract().Fields {
 		out[k] = f
 	}
+	captureIntegration := map[string]composer.Value{}
+	for k, f := range CaptureIntegrationContract().Fields {
+		out[k] = f
+		captureIntegration[k] = composer.ResourceRef(backend, k)
+	}
 	integration := map[string]composer.Value{}
 	for k := range EmailIntegrationContract().Fields {
 		integration[k] = composer.ResourceRef(backend, k)
 	}
 	return &composer.Feature{ID: id, Source: composer.Origin(), Requirements: []composer.Requirement{{ID: RuntimeRequirement, Contract: RuntimeContract(), Source: composer.Origin()}}, Resources: []composer.Resource{{ID: "backend", Kind: Kind, Source: composer.Origin(), Inputs: map[string]composer.Value{"runtime_table_name": composer.RequirementRef(id, RuntimeRequirement, "table_name"), "runtime_table_arn": composer.RequirementRef(id, RuntimeRequirement, "table_arn")}, Outputs: out}}, Offerings: []composer.Offering{
+		{ID: "capture_integration", Contract: CaptureIntegrationContract(), Values: captureIntegration},
 		{ID: "email_integration", Contract: EmailIntegrationContract(), Values: integration},
 		{ID: "identity", Contract: IdentityContract(), Values: map[string]composer.Value{"pool_id": composer.ResourceRef(backend, "pool_id"), "client_id": composer.ResourceRef(backend, "client_id"), "issuer": composer.ResourceRef(backend, "issuer")}},
 		{ID: "api", Contract: APIContract(), Values: map[string]composer.Value{"api_url": composer.ResourceRef(backend, "api_url"), "pool_id": composer.ResourceRef(backend, "pool_id"), "client_id": composer.ResourceRef(backend, "client_id"), "issuer": composer.ResourceRef(backend, "issuer")}},
 	}}
+}
+
+// DeclareWithCapture binds read-only capture facts before provisioning auth.
+// The capture backend consumes CaptureIntegrationContract after auth is available.
+func DeclareWithCapture(id string) *composer.Feature {
+	f := Declare(id)
+	f.Requirements = append(f.Requirements, composer.Requirement{ID: CaptureFactsRequirement, Contract: CaptureFactsContract(), Source: composer.Origin()})
+	f.Resources[0].Inputs["capture_table_name"] = composer.RequirementRef(id, CaptureFactsRequirement, "table_name")
+	f.Resources[0].Inputs["capture_table_arn"] = composer.RequirementRef(id, CaptureFactsRequirement, "table_arn")
+	return f
 }
 
 // Configurable describes supported mechanisms, not hypothetical runtime adapters.

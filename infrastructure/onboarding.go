@@ -5,8 +5,9 @@ import (
 	"github.com/lambdawalker/go.apexfission.aws.auth/runtimeconfig"
 )
 
-// An omitted deployment flag uses the new default; explicit false preserves the
-// operator's existing disabled capture choice. Published overrides remain separate.
+// With bound capture storage, an omitted flag preserves required capture defaults.
+// captureSetting disables these defaults when no facts table is available.
+// Published overrides remain separate.
 func deploymentRuntimeDefaults(environment, captureEnabled string) runtimeconfig.Config {
 	defaults := runtimeconfig.Default(environment)
 	defaults.Features.IDCapture = captureEnabled != "false"
@@ -31,11 +32,19 @@ func enrollmentPolicy(route, environment, runtimeARN, factsARN, captureARN, pool
 		statement("dynamodb:GetItem", runtimeARN, keys("ForAllValues:StringEquals", "ENV#"+environment)),
 		statement([]string{"dynamodb:GetItem", "dynamodb:UpdateItem"}, factsARN, keys("ForAllValues:StringLike", "enrollment#*")),
 	}
-	if route == "status" {
+	if route == "status" && captureARN != "" {
 		statements = append(statements, statement("dynamodb:GetItem", captureARN, keys("ForAllValues:StringLike", "ACCOUNT#*", "CAP#*")))
-	} else {
+	} else if route != "status" {
 		statements = append(statements, statement("cognito-idp:AdminSetUserPassword", poolARN, nil))
 	}
 	data, _ := json.Marshal(map[string]any{"Version": "2012-10-17", "Statement": statements})
 	return string(data)
+}
+
+// captureSetting keeps standalone authentication independent of capture storage.
+func captureSetting(cfg Config, opts Options) string {
+	if opts.CaptureTableName == nil {
+		return "false"
+	}
+	return cfg.Get("captureEnabled")
 }

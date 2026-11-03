@@ -9,8 +9,8 @@ import (
 
 func TestManifestOwnsOwnedFeatureArchives(t *testing.T) {
 	entries := Lambdas()
-	if len(entries) != 17 {
-		t.Fatalf("expected17archives,got%d", len(entries))
+	if len(entries) != 14 {
+		t.Fatalf("expected14archives,got%d", len(entries))
 	}
 	seen := map[string]bool{}
 	signin := 0
@@ -19,7 +19,7 @@ func TestManifestOwnsOwnedFeatureArchives(t *testing.T) {
 			t.Fatal("duplicate", e.Name)
 		}
 		seen[e.Name] = true
-		if e.Name == "admin" || e.Name == "index" {
+		if e.Name == "admin" || e.Name == "index" || strings.HasPrefix(e.Name, "capture") {
 			t.Fatal("application command leaked into feature")
 		}
 		if !strings.HasPrefix(e.Package, Module+"/cmd/") {
