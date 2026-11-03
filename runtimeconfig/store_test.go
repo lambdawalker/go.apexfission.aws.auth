@@ -69,6 +69,9 @@ func TestDefaultsFencedAgainstStaleDeploymentAndAdminOverride(t *testing.T) {
 	if len(writes) != 3 || aws.ToString(writes[0].ConditionCheck.TableName) != "registry" || aws.ToString(writes[0].ConditionCheck.ConditionExpression) != "revision = :revision AND #lock = :token" {
 		t.Fatal("deployment lease not in same transaction")
 	}
+	if len(writes[1].Put.ExpressionAttributeNames) != 0 {
+		t.Fatal("new config has unused expression aliases")
+	}
 	var created storedConfig
 	if e := attributevalue.UnmarshalMap(writes[1].Put.Item, &created); e != nil {
 		t.Fatal(e)
@@ -91,8 +94,11 @@ func TestDefaultsFencedAgainstStaleDeploymentAndAdminOverride(t *testing.T) {
 		t.Fatal(e)
 	}
 	writes = db.transactions[0].TransactItems
-	if aws.ToString(writes[1].Put.ConditionExpression) != "Revision = :revision AND (attribute_not_exists(Override) OR Override = :false) AND (attribute_not_exists(DefaultGeneration) OR DefaultGeneration < :generation)" {
+	if aws.ToString(writes[1].Put.ConditionExpression) != "Revision = :revision AND (attribute_not_exists(#override) OR #override = :false) AND (attribute_not_exists(DefaultGeneration) OR DefaultGeneration < :generation)" {
 		t.Fatal("racing override unprotected")
+	}
+	if writes[1].Put.ExpressionAttributeNames["#override"] != "Override" || len(writes[1].Put.ExpressionAttributeNames) != 1 {
+		t.Fatal("reserved Override attribute is not correctly aliased", writes[1].Put.ExpressionAttributeNames)
 	}
 	var next storedConfig
 	attributevalue.UnmarshalMap(writes[1].Put.Item, &next)
