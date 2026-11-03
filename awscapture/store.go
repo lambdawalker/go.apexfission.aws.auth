@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -20,6 +21,7 @@ import (
 type Store struct {
 	DB    *dynamodb.Client
 	Table string
+	Send  func(context.Context, capture.Job) error
 }
 
 func ownerKey(owner string) string {
@@ -173,7 +175,16 @@ func (s *Store) Swap(ctx context.Context, before, after capture.Record, ready bo
 		// Messages and transaction items can expose card data. Log only AWS error codes.
 		slog.Error("capture.store_swap_failed", "capture_id", after.ID, "ready_transaction", ready, "aws_error_code", code)
 	}
-	return conditional(e)
+	if e != nil {
+		return conditional(e)
+	}
+	// Persist intent before sending; the scheduled sweep recovers a lost send.
+	if s.Send != nil && (after.Work == "validate" || after.Work == "extract") && after.LeaseUntil == 0 && after.Due <= time.Now().Unix() {
+		if sendErr := s.Send(ctx, capture.Job{Owner: after.Owner, ID: after.ID, Generation: after.Generation, Work: after.Work}); sendErr != nil {
+			slog.Warn("capture.immediate_dispatch_failed", "capture_id", after.ID, "work", after.Work)
+		}
+	}
+	return nil
 }
 
 // Pending is the durable-intent sweep: the record and work index update atomically.
