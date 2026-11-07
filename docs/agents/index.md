@@ -12,4 +12,6 @@ Authentication supplies the API and identity bindings via `identity.card-capture
 and consumes the capture facts table for status. The capture feature owns the
 upload, retake, OCR and review endpoints. Changes to its OCR worker are picked up
 through the runtime and infrastructure Go module pins. The application selects the
-resolved versions used to build and deploy the worker.
+resolved versions used to build and deploy the worker. Early front OCR, stitched
+evidence, and admin-only comparison storage remain part of card capture. Auth
+does not expose comparison reports through its status endpoints.
