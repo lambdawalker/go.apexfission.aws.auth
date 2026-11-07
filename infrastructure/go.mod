@@ -68,7 +68,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
-	github.com/lambdawalker/go.appexfission.aws.card-capture v0.0.0-20261107013001-e6d6b70a21ff // indirect
+	github.com/lambdawalker/go.appexfission.aws.card-capture v0.0.0-20261107024743-146e262e7d96 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
