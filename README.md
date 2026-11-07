@@ -70,6 +70,8 @@ This changes resource ownership and table boundaries. It does not migrate live r
 
 ## Card capture boundary
 
+Start with the [integration entry](docs/agents/index.md) for system and runtime ownership.
+
 Card capture implementation and its three archives belong to [go.appexfission.aws.card-capture](https://github.com/lambdawalker/go.appexfission.aws.card-capture). Authentication imports only its standard-library `contracts` package for policy wire types and consent hashing. It owns no capture upload, extraction, worker, dispatch, queue, bucket or mutation code.
 
 Use `feature.DeclareWithCapture(id)` when composing card capture. Inject `CaptureFactsRequirement` (`capture.facts/v1`, string `table_name`/`table_arn`) from the card feature's storage resource, which is provisioned before auth. The card backend consumes `capture_integration` (`identity.card-capture/v1`) after auth; that offering includes API, pool/client/issuer, region and reset-control table outputs. This ordering avoids a resource cycle. Ordinary `Declare` remains independent of capture.
