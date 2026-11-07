@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.21.20
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.75.10
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.73.2
-	github.com/lambdawalker/go.appexfission.aws.card-capture v0.0.0-20261107024743-146e262e7d96
+	github.com/lambdawalker/go.appexfission.aws.card-capture v0.0.0-20261107054056-55e8f4033afe
 	github.com/lambdawalker/go.infra.composer v0.0.0-20261103235125-ad4cfd268616
 )
 
